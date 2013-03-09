@@ -1,9 +1,13 @@
-# BaristaBot
+# PortraitBot
 
-This repository contains code for an upcoming installation at SXSW. It's built with [openFrameworks](http://www.openframeworks.cc/) and makes use of the following addons:
+Hacking together [BaristaBot](http://github.com/kylemcdonald/BaristaBot) and [Kritzler](https://github.com/tinkerlog/Kritzler) to make a bot that draws your portrait with a wall plotter.
+
+It's built with [openFrameworks](http://www.openframeworks.cc/) and makes use of the following addons:
 
 * [ofxCv](https://github.com/kylemcdonald/ofxCv)
 * [ofxControlPanel](https://github.com/kylemcdonald/ofxControlPanel)
+
+- - -
 
 ## CoherentLinePlanning
 
