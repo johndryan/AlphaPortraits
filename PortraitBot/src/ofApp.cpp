@@ -1,9 +1,12 @@
+#define MOVE_ABS 0
+#define MOVE_REL 1
+#define LINE_ABS 2
+#define LINE_REL 3
+
 #include "ofApp.h"
 
 using namespace ofxCv;
 using namespace cv;
-
-
 
 //--------------------------------------------------------------
 void removeIslands(ofPixels& img) {
@@ -75,9 +78,19 @@ vector<ofPolyline> getPaths(ofPixels& img, float minGapLength = 2, int minPathLe
 	return paths;
 }
 
+//--------------------------------------------------------------
+
+vector<Instruction> instructions;
 
 //--------------------------------------------------------------
 void ofApp::setup() {
+    startX = 3000;
+    startY = 3000;
+    scaleFactor = 10;
+    startSending = false;
+    plotterReady = false;
+    currentInstruction = 0;
+    
 	ofSetVerticalSync(true);
 	ofSetFrameRate(120);
 	ofEnableSmoothing();
@@ -136,9 +149,25 @@ void ofApp::setup() {
     gui.addSlider("Z Height for Pic", 2000, 0, 15000, true);
     gui.loadSettings("calibration.xml");
     
-    AT.setup();
-    AT.cropped_size = croppedSize;
-    AT.start();
+//    AT.setup();
+//    AT.cropped_size = croppedSize;
+//    AT.start();
+	
+	serial.listDevices();
+	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
+	
+	serial.setup("/dev/tty.usbmodemfa131",57600);
+	serial.startContinuesRead(false);
+	ofAddListener(serial.NEW_MESSAGE,this,&ofApp::onNewMessage);
+}
+
+void ofApp::onNewMessage(string & message)
+{
+	cout << "onNewMessage, message: " << message << "\n";
+	if (message == "OK") {
+        cout << "-- PLOTTER READY --\n";
+        plotterReady = true;
+    }
 }
 
 
@@ -248,32 +277,53 @@ void ofApp::update(){
 		needToUpdate = false;
         
         // get arduino thread loaded with the paths and started
-        AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
+    //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
 		AT.unlock();
     }
-    AT.update();
+//    AT.update();
     
     // update AT variables
-    AT.TOL = gui.getValueI("Tolerance");
-    AT.DELAY_FAST = gui.getValueI("Jog Speed");
-    AT.DELAY_MIN = gui.getValueI("Printing LOW delay");
-    AT.HIGH_DELAY = gui.getValueI("Printing HIGH delay");
-    AT.INK_DELAY = gui.getValueI("Ink Delay");
-    AT.INK_START_DELAY = gui.getValueI("Ink Start Delay");
-    AT.INK_START_STEPS = gui.getValueI("Ink Start Steps");
-    AT.INK_STOP_DELAY = gui.getValueI("Ink Stop Delay");
-    AT.INK_STOP_STEPS = gui.getValueI("Ink Stop Steps");
-    AT.INK_WAIT = gui.getValueI("Ink Wait");
-    AT.INK_SLEEP_PIN = gui.getValueI("17 turns ink on");
+//    AT.TOL = gui.getValueI("Tolerance");
+//    AT.DELAY_FAST = gui.getValueI("Jog Speed");
+//    AT.DELAY_MIN = gui.getValueI("Printing LOW delay");
+//    AT.HIGH_DELAY = gui.getValueI("Printing HIGH delay");
+//    AT.INK_DELAY = gui.getValueI("Ink Delay");
+//    AT.INK_START_DELAY = gui.getValueI("Ink Start Delay");
+//    AT.INK_START_STEPS = gui.getValueI("Ink Start Steps");
+//    AT.INK_STOP_DELAY = gui.getValueI("Ink Stop Delay");
+//    AT.INK_STOP_STEPS = gui.getValueI("Ink Stop Steps");
+//    AT.INK_WAIT = gui.getValueI("Ink Wait");
+//    AT.INK_SLEEP_PIN = gui.getValueI("17 turns ink on");
     
-    AT.home_x = gui.getValueI("home_x");
-    AT.home_y = gui.getValueI("home_y");
-    AT.SCALE_X = gui.getValueI("SCALE_X");
-    AT.SCALE_Y = gui.getValueI("SCALE_Y");
-    AT.y_height = gui.getValueI("Y Height for Pic");
-    AT.z_height = gui.getValueI("Z Height for Pic");
+//    AT.home_x = gui.getValueI("home_x");
+//    AT.home_y = gui.getValueI("home_y");
+//    AT.SCALE_X = gui.getValueI("SCALE_X");
+//    AT.SCALE_Y = gui.getValueI("SCALE_Y");
+//    AT.y_height = gui.getValueI("Y Height for Pic");
+//    AT.z_height = gui.getValueI("Z Height for Pic");
+    
+	if (startSending && instructions.size() > 0){
+        
+        if(plotterReady)
+        {
+            cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
+            message = instructions[currentInstruction].toString();
+            currentInstruction += 1;
+            
+            if (currentInstruction >= instructions.size()) {
+                startSending = false;
+            }
+            
+            if(message != ""){
+                cout << "==== SENDING serial: " << message << "\n";
+                plotterReady = false;
+                serial.writeString(message);
+                message = "";
+            }
+        }
+	}
 }
 
 
@@ -289,6 +339,32 @@ void ofApp::drawPaths() {
 			ofLine(endPoint, startPoint);
 		}
 	}
+}
+
+
+//--------------------------------------------------------------
+void ofApp::pathsToInstructions() {
+    if (instructions.size()>0) instructions.erase(instructions.begin());
+    cout << "--PATHS TO INSTRUCTIONS\n";
+    // MOVE TO START:
+    ofVec2f startPoint = paths[0].getVertices()[0];
+    instructions.push_back(Instruction(MOVE_ABS, startPoint.x*scaleFactor + startX, startPoint.y*scaleFactor + startY));
+    cout << "---- MOVE FOR #1 TO: [ " << startPoint << "]\n";
+	for(int i = 0; i < paths.size(); i++) {
+		//DRAW
+        for(int j = 1; j < paths[i].getVertices().size(); j++) {
+            ofVec2f endPoint = paths[i].getVertices()[j];
+            instructions.push_back(Instruction(LINE_ABS, endPoint.x*scaleFactor + startX, endPoint.y*scaleFactor + startY ));
+            cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
+        }
+		if(i + 1 < paths.size()) {
+            // MOVE
+			ofVec2f startPoint = paths[i + 1].getVertices()[0];
+            instructions.push_back(Instruction(MOVE_ABS, startPoint.x*scaleFactor + startX, startPoint.y*scaleFactor + startY ));
+            cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
+		}
+	}
+    cout << "--COMPLETE: x INSTRUCTIONS\n";
 }
 
 //--------------------------------------------------------------
@@ -317,7 +393,7 @@ void ofApp::draw() {
     ofPopStyle();
     ofPopMatrix();
     
-    AT.draw();
+//    AT.draw();
 }
 
 int ofApp::getPoints(int steps){
@@ -333,7 +409,7 @@ void ofApp::keyPressed(int key) {
         case 'N':
             // if coffee photo is good, press b
             // sends the arm up to start over, ready for a new person
-            AT.shootCoffee();
+        //    AT.shootCoffee();
             break;
         case ' ':
             // when the arm is up press space to take a face photo
@@ -344,11 +420,18 @@ void ofApp::keyPressed(int key) {
             // once you have a good face photo, press p
             // machine will lower and go home then print starts automatically
             // after print machine raises up and takes a coffee photo
-//            AT.curState = AT.HOME;
+//        //    AT.curState = AT.HOME;
             if (paths.size() > 0) {
-                AT.curState = AT.FACE_PHOTO;
+                pathsToInstructions();
+            //    AT.curState = AT.FACE_PHOTO;
             } else {
-                AT.curState = AT.NEED_PHOTO;
+            //    AT.curState = AT.NEED_PHOTO;
+            }
+            break;
+        case 'g':
+            // GO PRINT IT!!
+            if (instructions.size() > 0) {
+                startSending = true;
             }
             break;
         case 'c':
@@ -371,23 +454,23 @@ void ofApp::keyPressed(int key) {
             ln.addVertex(getPoints(800) + croppedSize, getPoints(8400));
             
             paths.push_back(ln);
-            AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
-            AT.unlock();
+        //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
+        //    AT.unlock();
             break;
         case 'R':
-            AT.curState = AT.RESET;
-            AT.reset();
+        //    AT.curState = AT.RESET;
+        //    AT.reset();
             break;
         case 's':
             // stop in the middle of a print and reset with same image
             // must manually put machine back at origin
-            AT.curState = AT.SHOOT_FACE;
-            AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
-            AT.unlock();
+        //    AT.curState = AT.SHOOT_FACE;
+        //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
+        //    AT.unlock();
         // image1: save the current image
         case 'i':
             ofSaveImage(thinned, "saved_image_io.png");
@@ -397,10 +480,10 @@ void ofApp::keyPressed(int key) {
             ofLoadImage(io, "saved_image_io.png");
             io.update();
             paths = getPaths(io, minGapLength, minPathLength);
-            AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
-            AT.unlock();
+        //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
+        //    AT.unlock();
             break;
         // image2: save the current image
         case 'j':
@@ -411,10 +494,10 @@ void ofApp::keyPressed(int key) {
             ofLoadImage(jk, "saved_image_jk.png");
             jk.update();
             paths = getPaths(jk, minGapLength, minPathLength);
-            AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
-            AT.unlock();
+        //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
+        //    AT.unlock();
             break;
         // image3: save the current image
         case 'n':
@@ -425,80 +508,80 @@ void ofApp::keyPressed(int key) {
             ofLoadImage(nm, "saved_image_nm.png");
             nm.update();
             paths = getPaths(nm, minGapLength, minPathLength);
-            AT.lock();
-            AT.paths = paths;
-            AT.points = paths.begin()->getVertices();
-            AT.unlock();
+        //    AT.lock();
+        //    AT.paths = paths;
+        //    AT.points = paths.begin()->getVertices();
+        //    AT.unlock();
             break;
         case '1':
-            AT.DELAY_MIN = 500;
+        //    AT.DELAY_MIN = 500;
             break;
         case '2':
-            AT.DELAY_MIN = 600;
+        //    AT.DELAY_MIN = 600;
             break;
         case '3':
-            AT.DELAY_MIN = 700;
+        //    AT.DELAY_MIN = 700;
             break;
         case '4':
-            AT.DELAY_MIN = 800;
+        //    AT.DELAY_MIN = 800;
             break;
         case '5':
-            AT.DELAY_MIN = 900;
+        //    AT.DELAY_MIN = 900;
             break;
         case '6':
-            AT.DELAY_MIN = 1000;
+        //    AT.DELAY_MIN = 1000;
             break;
         case 'q':
-            AT.HIGH_DELAY = 50;
+        //    AT.HIGH_DELAY = 50;
             break;
         case 'w':
-            AT.HIGH_DELAY = 60;
+        //    AT.HIGH_DELAY = 60;
             break;
         case 'e':
-            AT.HIGH_DELAY = 70;
+        //    AT.HIGH_DELAY = 70;
             break;
         case 'r':
-            AT.HIGH_DELAY = 80;
+        //    AT.HIGH_DELAY = 80;
             break;
         case 't':
-            AT.HIGH_DELAY = 90;
+        //    AT.HIGH_DELAY = 90;
             break;
         case 'y':
-            AT.HIGH_DELAY = 100;
+        //    AT.HIGH_DELAY = 100;
             break;
         case 'h':
             // for debugging
-            AT.goHome();
+        //    AT.goHome();
             break;
         case OF_KEY_RIGHT:
-            AT.jogRight();
-            AT.curState = AT.JOG;
+        //    AT.jogRight();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_LEFT:
-            AT.jogLeft();
-            AT.curState = AT.JOG;
+        //    AT.jogLeft();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_UP:
-            AT.jogForward();
-            AT.curState = AT.JOG;
+        //    AT.jogForward();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_DOWN:
-            AT.jogBack();
-            AT.curState = AT.JOG;
+        //    AT.jogBack();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_HOME:
-            AT.jogUp();
-            AT.curState = AT.JOG;
+        //    AT.jogUp();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_END:
-            AT.jogDown();
-            AT.curState = AT.JOG;
+        //    AT.jogDown();
+        //    AT.curState = AT.JOG;
             break;
         case OF_KEY_PAGE_UP:
-            AT.plungerUp();
+        //    AT.plungerUp();
             break;
         case OF_KEY_PAGE_DOWN:
-            AT.plungerDown();
+        //    AT.plungerDown();
             break;
         default:
             break;
@@ -506,10 +589,9 @@ void ofApp::keyPressed(int key) {
 }
 
 void ofApp::exit() {
-    AT.stop();
+//    AT.stop();
     ofSleepMillis(1000);
 }
-
 
 
 
