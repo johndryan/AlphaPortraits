@@ -156,7 +156,7 @@ void ofApp::setup() {
 	serial.listDevices();
 	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
 	
-	serial.setup("/dev/tty.usbmodemfa131",57600);
+	serial.setup(deviceList.size()-1,57600);
 	serial.startContinuesRead(false);
 	ofAddListener(serial.NEW_MESSAGE,this,&ofApp::onNewMessage);
     
