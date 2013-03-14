@@ -84,10 +84,10 @@ vector<Instruction> instructions;
 
 //--------------------------------------------------------------
 void ofApp::setup() {
-    startX = 3000;
-    startY = 3000;
+    startX = 6000;
+    startY = 6000;
     scaleFactor = 10;
-    startSending = false;
+    currentlyPlotting = false;
     plotterReady = false;
     currentInstruction = 0;
     
@@ -159,6 +159,13 @@ void ofApp::setup() {
 	serial.setup("/dev/tty.usbmodemfa131",57600);
 	serial.startContinuesRead(false);
 	ofAddListener(serial.NEW_MESSAGE,this,&ofApp::onNewMessage);
+    
+    timer = 0;
+    timeout = 10;
+    runOnTimer = false;
+    
+    ofTrueTypeFont::setGlobalDpi(72);
+    font.loadFont("verdana.ttf", 15, true, true);
 }
 
 void ofApp::onNewMessage(string & message)
@@ -173,156 +180,174 @@ void ofApp::onNewMessage(string & message)
 
 //--------------------------------------------------------------
 void ofApp::update(){
-	cam.update();
-	if(cam.isFrameNew() && needToUpdate) {
-		int black = gui.getValueI("black");
-		float sigma1 = gui.getValueF("sigma1");
-		float sigma2 = gui.getValueF("sigma2");
-		float tau = gui.getValueF("tau");
-        float thresh = gui.getValueF("thresh");
-		int halfw = gui.getValueI("halfw");
-        int smoothPasses = gui.getValueI("smoothPasses");
-		minGapLength = gui.getValueF("minGapLength");
-		minPathLength = gui.getValueI("minPathLength");
-		float facePadding = gui.getValueF("facePadding");
-        int verticalOffset = gui.getValueI("verticalOffset");
+cam.update();
+    // -- NO WE'RE NOT PLOTTING, CHECK FOR NEW FACE?
+
+    // -- Is camera, plotter and X ready to go
+    if(cam.isFrameNew() && plotterReady && !currentlyPlotting) {
         
-		convertColor(cam, gray, CV_RGB2GRAY);
-        
-        // Save the original image
-		string fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
-        + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " original.png";
-		ofSaveImage(gray.getPixelsRef(), fileName);
-		cout << "saved " << ofToString(fileName) << endl;
-        
-		resize(gray, graySmall);
-		Mat graySmallMat = toCv(graySmall);
-		equalizeHist(graySmallMat, graySmallMat);		
-		classifier.detectMultiScale(graySmallMat, objects, 1.05, 1,
-									CASCADE_DO_CANNY_PRUNING |
-									CASCADE_FIND_BIGGEST_OBJECT |
-									//CASCADE_DO_ROUGH_SEARCH |
-									0);
-		
-		ofRectangle faceRect;
-		if(objects.empty()) {
-			// if there are no faces found, use the whole canvas
-			faceRect.set(0, 0, camWidth, camHeight);
-		} else {
-			faceRect = toOf(objects[0]);
-			faceRect.getPositionRef() /= faceTrackingScaleFactor;
-			faceRect.scale(1 / faceTrackingScaleFactor);
-			faceRect.scaleFromCenter(facePadding);
-            faceRect.translateY(verticalOffset);
-		}
-		
-		ofRectangle camBoundingBox(0, 0, camWidth, camHeight);
-		faceRect = faceRect.getIntersection(camBoundingBox);
-		float whDiff = fabsf(faceRect.width - faceRect.height);
-		if(faceRect.width < faceRect.height) {
-			faceRect.height = faceRect.width;
-			faceRect.y += whDiff / 2;
-		} else {
-			faceRect.width = faceRect.height;
-			faceRect.x += whDiff / 2;
-		}
-		
-		cv::Rect roi = toCv(faceRect);
-		Mat grayMat = toCv(gray);
-		Mat croppedGrayMat(grayMat, roi);
-		resize(croppedGrayMat, cropped);
-		cropped.update();
-        
-        // Save the cropped face
-		fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
-        + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " face.png";
-		ofSaveImage(cropped, fileName);
-		cout << "saved " << ofToString(fileName) << endl;
-		
-		int j = 0;
-		unsigned char* grayPixels = cropped.getPixels();
-		for(int y = 0; y < croppedSize; y++) {
-			for(int x = 0; x < croppedSize; x++) {
-				img[x][y] = grayPixels[j++] - black;
-			}
-		}
-		etf.init(croppedSize, croppedSize);
-		etf.set(img);
-		etf.Smooth(halfw, smoothPasses);
-		GetFDoG(img, etf, sigma1, sigma2, tau);
-		j = 0;
-		unsigned char* cldPixels = cld.getPixels();
-		for(int y = 0; y < croppedSize; y++) {
-			for(int x = 0; x < croppedSize; x++) {
-				cldPixels[j++] = img[x][y];
-			}
-		}
-		threshold(cld, thresholded, thresh, true);
-		copy(thresholded, thinned);
-		thin(thinned);
-		removeIslands(thinned.getPixelsRef());
-		
-		gray.update();
-		cld.update();
-		thresholded.update();
-		thinned.update();
-        
-        // Save the thinned paths
-		fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
-        + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " thinned.png";
-		ofSaveImage(thinned, fileName);
-		cout << "saved " << ofToString(fileName) << endl;
-		
-		paths = getPaths(thinned, minGapLength, minPathLength);
-		needToUpdate = false;
-        
-        // get arduino thread loaded with the paths and started
-    //    AT.lock();
-        //    AT.paths = paths;
-        //    AT.points = paths.begin()->getVertices();
-		AT.unlock();
-    }
-//    AT.update();
-    
-    // update AT variables
-//    AT.TOL = gui.getValueI("Tolerance");
-//    AT.DELAY_FAST = gui.getValueI("Jog Speed");
-//    AT.DELAY_MIN = gui.getValueI("Printing LOW delay");
-//    AT.HIGH_DELAY = gui.getValueI("Printing HIGH delay");
-//    AT.INK_DELAY = gui.getValueI("Ink Delay");
-//    AT.INK_START_DELAY = gui.getValueI("Ink Start Delay");
-//    AT.INK_START_STEPS = gui.getValueI("Ink Start Steps");
-//    AT.INK_STOP_DELAY = gui.getValueI("Ink Stop Delay");
-//    AT.INK_STOP_STEPS = gui.getValueI("Ink Stop Steps");
-//    AT.INK_WAIT = gui.getValueI("Ink Wait");
-//    AT.INK_SLEEP_PIN = gui.getValueI("17 turns ink on");
-    
-//    AT.home_x = gui.getValueI("home_x");
-//    AT.home_y = gui.getValueI("home_y");
-//    AT.SCALE_X = gui.getValueI("SCALE_X");
-//    AT.SCALE_Y = gui.getValueI("SCALE_Y");
-//    AT.y_height = gui.getValueI("Y Height for Pic");
-//    AT.z_height = gui.getValueI("Z Height for Pic");
-    
-	if (startSending && instructions.size() > 0){
-        
-        if(plotterReady)
-        {
-            cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
-            message = instructions[currentInstruction].toString();
-            currentInstruction += 1;
-            
-            if (currentInstruction >= instructions.size()) {
-                startSending = false;
-            }
-            
-            if(message != ""){
-                cout << "==== SENDING serial: " << message << "\n";
-                plotterReady = false;
-                serial.writeString(message);
-                message = "";
-            }
+        // -- DO TIMER --> TRIGGER
+        if((ofGetElapsedTimef() - timer) > timeout && runOnTimer) {
+            cout << "-- CHECKING FOR FACES -- " << endl;
+            timer = ofGetElapsedTimef();
+            needToUpdate = true;
         }
+        
+        // UPDATE, TRIGGERED BY TIMER or SPACEBAR
+        if(needToUpdate) {
+            int black = gui.getValueI("black");
+            float sigma1 = gui.getValueF("sigma1");
+            float sigma2 = gui.getValueF("sigma2");
+            float tau = gui.getValueF("tau");
+            float thresh = gui.getValueF("thresh");
+            int halfw = gui.getValueI("halfw");
+            int smoothPasses = gui.getValueI("smoothPasses");
+            minGapLength = gui.getValueF("minGapLength");
+            minPathLength = gui.getValueI("minPathLength");
+            float facePadding = gui.getValueF("facePadding");
+            int verticalOffset = gui.getValueI("verticalOffset");
+            
+            convertColor(cam, gray, CV_RGB2GRAY);
+            
+            // Save the original image
+            string fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
+            + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " original.png";
+//                ofSaveImage(gray.getPixelsRef(), fileName);
+//                cout << "saved " << ofToString(fileName) << endl;
+            
+            resize(gray, graySmall);
+            Mat graySmallMat = toCv(graySmall);
+            equalizeHist(graySmallMat, graySmallMat);		
+            classifier.detectMultiScale(graySmallMat, objects, 1.05, 1,
+                                        CASCADE_DO_CANNY_PRUNING |
+                                        CASCADE_FIND_BIGGEST_OBJECT |
+                                        //CASCADE_DO_ROUGH_SEARCH |
+                                        0);
+            
+            ofRectangle faceRect;
+            if(objects.empty()) {
+                // if there are no faces found, use the whole canvas
+                faceRect.set(0, 0, camWidth, camHeight);
+            } else {
+                faceRect = toOf(objects[0]);
+                faceRect.getPositionRef() /= faceTrackingScaleFactor;
+                faceRect.scale(1 / faceTrackingScaleFactor);
+                faceRect.scaleFromCenter(facePadding);
+                faceRect.translateY(verticalOffset);
+            }
+            
+            ofRectangle camBoundingBox(0, 0, camWidth, camHeight);
+            faceRect = faceRect.getIntersection(camBoundingBox);
+            float whDiff = fabsf(faceRect.width - faceRect.height);
+            if(faceRect.width < faceRect.height) {
+                faceRect.height = faceRect.width;
+                faceRect.y += whDiff / 2;
+            } else {
+                faceRect.width = faceRect.height;
+                faceRect.x += whDiff / 2;
+            }
+            
+            cv::Rect roi = toCv(faceRect);
+            Mat grayMat = toCv(gray);
+            Mat croppedGrayMat(grayMat, roi);
+            resize(croppedGrayMat, cropped);
+            cropped.update();
+            
+            // Save the cropped face
+            fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
+            + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " face.png";
+            ofSaveImage(cropped, fileName);
+            cout << "saved " << ofToString(fileName) << endl;
+            
+            int j = 0;
+            unsigned char* grayPixels = cropped.getPixels();
+            for(int y = 0; y < croppedSize; y++) {
+                for(int x = 0; x < croppedSize; x++) {
+                    img[x][y] = grayPixels[j++] - black;
+                }
+            }
+            etf.init(croppedSize, croppedSize);
+            etf.set(img);
+            etf.Smooth(halfw, smoothPasses);
+            GetFDoG(img, etf, sigma1, sigma2, tau);
+            j = 0;
+            unsigned char* cldPixels = cld.getPixels();
+            for(int y = 0; y < croppedSize; y++) {
+                for(int x = 0; x < croppedSize; x++) {
+                    cldPixels[j++] = img[x][y];
+                }
+            }
+            threshold(cld, thresholded, thresh, true);
+            copy(thresholded, thinned);
+            thin(thinned);
+            removeIslands(thinned.getPixelsRef());
+            
+            gray.update();
+            cld.update();
+            thresholded.update();
+            thinned.update();
+            
+            // Save the thinned paths
+            fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
+            + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " thinned.png";
+            ofSaveImage(thinned, fileName);
+            cout << "saved " << ofToString(fileName) << endl;
+            
+            paths = getPaths(thinned, minGapLength, minPathLength);
+            needToUpdate = false;
+            
+            //START PLOTTER AUTOMATICALLY
+            if (runOnTimer && paths.size() > 0) {
+                pathsToInstructions();
+            }
+            
+            // get arduino thread loaded with the paths and started
+        //    AT.lock();
+            //    AT.paths = paths;
+            //    AT.points = paths.begin()->getVertices();
+            //    AT.unlock();
+        }
+    }
+    
+    //    AT.update();
+        
+        // update AT variables
+    //    AT.TOL = gui.getValueI("Tolerance");
+    //    AT.DELAY_FAST = gui.getValueI("Jog Speed");
+    //    AT.DELAY_MIN = gui.getValueI("Printing LOW delay");
+    //    AT.HIGH_DELAY = gui.getValueI("Printing HIGH delay");
+    //    AT.INK_DELAY = gui.getValueI("Ink Delay");
+    //    AT.INK_START_DELAY = gui.getValueI("Ink Start Delay");
+    //    AT.INK_START_STEPS = gui.getValueI("Ink Start Steps");
+    //    AT.INK_STOP_DELAY = gui.getValueI("Ink Stop Delay");
+    //    AT.INK_STOP_STEPS = gui.getValueI("Ink Stop Steps");
+    //    AT.INK_WAIT = gui.getValueI("Ink Wait");
+    //    AT.INK_SLEEP_PIN = gui.getValueI("17 turns ink on");
+        
+    //    AT.home_x = gui.getValueI("home_x");
+    //    AT.home_y = gui.getValueI("home_y");
+    //    AT.SCALE_X = gui.getValueI("SCALE_X");
+    //    AT.SCALE_Y = gui.getValueI("SCALE_Y");
+    //    AT.y_height = gui.getValueI("Y Height for Pic");
+    //    AT.z_height = gui.getValueI("Z Height for Pic");
+    
+    // -- ARE WE PLOTTING?
+	if (currentlyPlotting && instructions.size() > 0 && plotterReady){
+        cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
+        message = instructions[currentInstruction].toString();
+        currentInstruction += 1;
+        
+        if (currentInstruction >= instructions.size()) {
+            currentlyPlotting = false;
+        }
+        
+        if(message != ""){
+            cout << "==== SENDING serial: " << message << "\n";
+            plotterReady = false;
+            serial.writeString(message);
+            message = "";
+        }
+        
 	}
 }
 
@@ -364,7 +389,10 @@ void ofApp::pathsToInstructions() {
             cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
 		}
 	}
-    cout << "--COMPLETE: x INSTRUCTIONS\n";
+    cout << "--COMPLETE: x INSTRUCTIONS CREATED\n" << "--NOW PRINT";
+    if (instructions.size() > 0) {
+        currentlyPlotting = true;
+    }
 }
 
 //--------------------------------------------------------------
@@ -379,6 +407,8 @@ void ofApp::draw() {
     thresholded.draw(gray.getWidth(), (y+=cld.getHeight()));
     thinned.draw(gray.getWidth(), (y+=thresholded.getHeight()));
 
+    cam.draw(0, gray.getHeight(), gray.getWidth(), gray.getHeight());
+    
     ofPushMatrix();
     ofTranslate(gray.getWidth(), 0);
     drawPaths();
@@ -394,6 +424,42 @@ void ofApp::draw() {
     ofPopMatrix();
     
 //    AT.draw();
+    
+    if (plotterReady) {
+        // Critical Mass Present
+        ofSetColor(0, 255, 0);
+    } else {
+        // Not enough users
+        ofSetColor(255, 0, 0);
+    }
+    ofCircle(20, 20, 10);
+    
+    ofSetColor(225);
+    font.drawString("Plotter Ready", 40, 25);
+    
+    if (runOnTimer) {
+        // Critical Mass Present
+        ofSetColor(0, 255, 0);
+    } else {
+        // Not enough users
+        ofSetColor(255, 0, 0);
+    }
+    ofCircle(20, 60, 10);
+    
+    ofSetColor(225);
+    font.drawString("Auto", 40, 65);
+    
+    if (currentlyPlotting) {
+        // Critical Mass Present
+        ofSetColor(0, 255, 0);
+    } else {
+        // Not enough users
+        ofSetColor(255, 0, 0);
+    }
+    ofCircle(20, 100, 10);
+    
+    ofSetColor(225);
+    font.drawString("Plotting", 40, 105);
 }
 
 int ofApp::getPoints(int steps){
@@ -422,6 +488,7 @@ void ofApp::keyPressed(int key) {
             // after print machine raises up and takes a coffee photo
 //        //    AT.curState = AT.HOME;
             if (paths.size() > 0) {
+                cout << "--PRINT REQUESTED\n";
                 pathsToInstructions();
             //    AT.curState = AT.FACE_PHOTO;
             } else {
@@ -431,7 +498,8 @@ void ofApp::keyPressed(int key) {
         case 'g':
             // GO PRINT IT!!
             if (instructions.size() > 0) {
-                startSending = true;
+                cout << "--PLOT REQUESTED\n";
+                currentlyPlotting = true;
             }
             break;
         case 'c':
@@ -541,6 +609,13 @@ void ofApp::keyPressed(int key) {
         //    AT.HIGH_DELAY = 70;
             break;
         case 'r':
+            if (runOnTimer) {
+                cout << "-- TIMER OFF -- " << endl;
+                runOnTimer = false;
+            } else {
+                cout << "-- TIMER ON -- " << endl;
+                runOnTimer = true;
+            }
         //    AT.HIGH_DELAY = 80;
             break;
         case 't':

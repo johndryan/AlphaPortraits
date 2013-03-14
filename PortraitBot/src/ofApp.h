@@ -31,7 +31,7 @@ public:
 	ETF etf;
     ofxAutoControlPanel gui;
 	ofVideoGrabber cam;
-	ofImage gray, cld, thresholded, thinned, io, jk, nm;
+	ofImage gray, cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray;
     ofImage graySmall, cropped;
     cv::CascadeClassifier classifier;
     arduinoThread AT;
@@ -40,6 +40,7 @@ public:
 	vector<ofPolyline> paths;
     ofPolyline ln;
 
+    float timer, timeout;
     
 	float faceTrackingScaleFactor;
     int croppedSize;
@@ -52,7 +53,9 @@ public:
     ofxSimpleSerial	serial;
     int nInstructions, currentInstruction;
     float startX, startY, scaleFactor;
-    bool startSending, plotterReady;
+    bool currentlyPlotting, plotterReady, runOnTimer;
     string      message;
     void		onNewMessage(string & message);
+    
+    ofTrueTypeFont font;
 };
