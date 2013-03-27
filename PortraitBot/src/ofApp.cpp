@@ -84,8 +84,10 @@ vector<Instruction> instructions;
 
 //--------------------------------------------------------------
 void ofApp::setup() {
-    startX = 6000;
-    startY = 6000;
+    min_X = 1500;
+    max_X = 11350;
+    min_Y = 2500;
+    max_Y = 11350;
     scaleFactor = 10;
     currentlyPlotting = false;
     plotterReady = false;
@@ -141,12 +143,12 @@ void ofApp::setup() {
     gui.loadSettings("printvariables.xml");
     
     gui.addPanel("Calibration");
-    gui.addSlider("SCALE_X", 62, 50, 125, true);
-    gui.addSlider("SCALE_Y", 50, 40, 100, true); 
-    gui.addSlider("home_x", -100, -256, 256, true);
-    gui.addSlider("home_y", -100, -256, 256, true);
-    gui.addSlider("Y Height for Pic", 2000, 0, 10000, true);
-    gui.addSlider("Z Height for Pic", 2000, 0, 15000, true);
+    gui.addSlider("SCALE", 10, 1, 20, true);
+    gui.addSlider("home_x", 6425, min_X, max_X, true);
+    gui.addSlider("home_y", 6425, min_Y, max_Y, true);
+    gui.addSlider("startX", 6000, min_X, max_X, true);
+    gui.addSlider("startY", 6000, min_Y, max_Y, true);
+    // Add Booleans as buttons?
     gui.loadSettings("calibration.xml");
     
 //    AT.setup();
@@ -155,8 +157,19 @@ void ofApp::setup() {
 	
 	serial.listDevices();
 	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
+    
+    string deviceLine, serialID;
+    for(int i=0; i<deviceList.size();i++){
+        
+        deviceLine = deviceList[i].getDeviceName().c_str();
+        
+        if(deviceLine.substr(0,12) == "tty.usbmodem"){
+            serialID = "/dev/" +deviceLine;
+            cout<<"arduino serial = "<<serialID<<endl;
+        }
+    }
 	
-	serial.setup(deviceList.size()-1,57600);
+	serial.setup(serialID,57600);
 	serial.startContinuesRead(false);
 	ofAddListener(serial.NEW_MESSAGE,this,&ofApp::onNewMessage);
     
@@ -166,6 +179,8 @@ void ofApp::setup() {
     
     ofTrueTypeFont::setGlobalDpi(72);
     font.loadFont("verdana.ttf", 15, true, true);
+    firstLastDraw = false;
+    randomLoc = false;
 }
 
 void ofApp::onNewMessage(string & message)
@@ -369,6 +384,15 @@ void ofApp::drawPaths() {
 
 //--------------------------------------------------------------
 void ofApp::pathsToInstructions() {
+    float startX = gui.getValueF("startX");
+    float startY = gui.getValueF("startY");
+    float home_x = gui.getValueF("home_x");
+    float home_y = gui.getValueF("home_y");
+    
+    if (randomLoc) {
+        startX = ofRandom(min_X, (max_X-croppedSize*scaleFactor));
+        startY = ofRandom(min_Y, (max_Y-croppedSize*scaleFactor));
+    }
     if (instructions.size()>0) instructions.erase(instructions.begin());
     cout << "--PATHS TO INSTRUCTIONS\n";
     // MOVE TO START:
@@ -382,8 +406,13 @@ void ofApp::pathsToInstructions() {
             instructions.push_back(Instruction(LINE_ABS, endPoint.x*scaleFactor + startX, endPoint.y*scaleFactor + startY ));
             cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
         }
+        // MOVE
+        if (firstLastDraw && i == 0 && paths.size() > 2) {
+            cout << "---- SKIP TO LAST VECTOR SET \n";
+            // MOVE STRAIGHT TO LAST DRAW SET
+            i = paths.size()-2;
+        }
 		if(i + 1 < paths.size()) {
-            // MOVE
 			ofVec2f startPoint = paths[i + 1].getVertices()[0];
             instructions.push_back(Instruction(MOVE_ABS, startPoint.x*scaleFactor + startX, startPoint.y*scaleFactor + startY ));
             cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
@@ -391,6 +420,7 @@ void ofApp::pathsToInstructions() {
 	}
     cout << "--COMPLETE: x INSTRUCTIONS CREATED\n" << "--NOW PRINT";
     if (instructions.size() > 0) {
+        instructions.push_back(Instruction(MOVE_ABS, home_x, home_y ));
         currentlyPlotting = true;
     }
 }
@@ -426,10 +456,8 @@ void ofApp::draw() {
 //    AT.draw();
     
     if (plotterReady) {
-        // Critical Mass Present
         ofSetColor(0, 255, 0);
     } else {
-        // Not enough users
         ofSetColor(255, 0, 0);
     }
     ofCircle(20, 20, 10);
@@ -438,28 +466,44 @@ void ofApp::draw() {
     font.drawString("Plotter Ready", 40, 25);
     
     if (runOnTimer) {
-        // Critical Mass Present
         ofSetColor(0, 255, 0);
     } else {
-        // Not enough users
         ofSetColor(255, 0, 0);
     }
     ofCircle(20, 60, 10);
     
     ofSetColor(225);
-    font.drawString("Auto", 40, 65);
+    font.drawString("Auto (r)", 40, 65);
     
     if (currentlyPlotting) {
-        // Critical Mass Present
         ofSetColor(0, 255, 0);
     } else {
-        // Not enough users
         ofSetColor(255, 0, 0);
     }
     ofCircle(20, 100, 10);
     
     ofSetColor(225);
     font.drawString("Plotting", 40, 105);
+    
+    if (firstLastDraw) {
+        ofSetColor(0, 255, 0);
+    } else {
+        ofSetColor(255, 0, 0);
+    }
+    ofCircle(20, 140, 10);
+    
+    ofSetColor(225);
+    font.drawString("Short Draw (1)", 40, 145);
+    
+    if (randomLoc) {
+        ofSetColor(0, 255, 0);
+    } else {
+        ofSetColor(255, 0, 0);
+    }
+    ofCircle(20, 180, 10);
+    
+    ofSetColor(225);
+    font.drawString("Random Location (2)", 40, 185);
 }
 
 int ofApp::getPoints(int steps){
@@ -581,10 +625,30 @@ void ofApp::keyPressed(int key) {
         //    AT.points = paths.begin()->getVertices();
         //    AT.unlock();
             break;
+        case '0':
+            cout << "-- RETURN TO HOME -- " << endl;
+            message = "M " + ofToString(gui.getValueI("home_x")) + " " + ofToString(gui.getValueI("home_y")) + "/n";
+            serial.writeString(message);
+            message = "";
+            break;
         case '1':
+            if (firstLastDraw) {
+                cout << "-- firstLastDraw OFF -- " << endl;
+                firstLastDraw = false;
+            } else {
+                cout << "-- firstLastDraw ON -- " << endl;
+                firstLastDraw = true;
+            }
         //    AT.DELAY_MIN = 500;
             break;
         case '2':
+            if (randomLoc) {
+                cout << "-- randomLoc OFF -- " << endl;
+                randomLoc = false;
+            } else {
+                cout << "-- randomLoc ON -- " << endl;
+                randomLoc = true;
+            }
         //    AT.DELAY_MIN = 600;
             break;
         case '3':

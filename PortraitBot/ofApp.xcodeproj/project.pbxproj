@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		037EC33016E1414D0061260C /* arduinoThread.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 037EC32D16E1414D0061260C /* arduinoThread.cpp */; };
+		1B7154E316EC171400367CFC /* Instruction.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B7154E216EC171400367CFC /* Instruction.cpp */; };
+		1B7154E616EC290000367CFC /* ofxSimpleSerial.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1B7154E416EC290000367CFC /* ofxSimpleSerial.cpp */; };
 		27DA10301635CB4400F13FE6 /* ofApp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27DA102E1635CB4400F13FE6 /* ofApp.cpp */; };
 		27DA10401635CBB400F13FE6 /* tinyxml.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27DA10391635CBB400F13FE6 /* tinyxml.cpp */; };
 		27DA10411635CBB400F13FE6 /* tinyxmlerror.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27DA103B1635CBB400F13FE6 /* tinyxmlerror.cpp */; };
@@ -106,6 +108,10 @@
 		037EC32516DFB3E90061260C /* haarcascade_frontalface_alt2.xml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = haarcascade_frontalface_alt2.xml; path = bin/data/haarcascade_frontalface_alt2.xml; sourceTree = SOURCE_ROOT; };
 		037EC32D16E1414D0061260C /* arduinoThread.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = arduinoThread.cpp; sourceTree = "<group>"; };
 		037EC32E16E1414D0061260C /* arduinoThread.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = arduinoThread.h; sourceTree = "<group>"; };
+		1B7154E116EC171400367CFC /* Instruction.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Instruction.h; sourceTree = "<group>"; };
+		1B7154E216EC171400367CFC /* Instruction.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Instruction.cpp; sourceTree = "<group>"; };
+		1B7154E416EC290000367CFC /* ofxSimpleSerial.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ofxSimpleSerial.cpp; sourceTree = "<group>"; };
+		1B7154E516EC290000367CFC /* ofxSimpleSerial.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ofxSimpleSerial.h; sourceTree = "<group>"; };
 		27D9ED9B1619258700419619 /* cv.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = cv.h; path = ../../../addons/ofxOpenCv/libs/opencv/include/opencv/cv.h; sourceTree = SOURCE_ROOT; };
 		27D9ED9C1619258700419619 /* cv.hpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = cv.hpp; path = ../../../addons/ofxOpenCv/libs/opencv/include/opencv/cv.hpp; sourceTree = SOURCE_ROOT; };
 		27D9ED9D1619258700419619 /* cvaux.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = cvaux.h; path = ../../../addons/ofxOpenCv/libs/opencv/include/opencv/cvaux.h; sourceTree = SOURCE_ROOT; };
@@ -825,6 +831,10 @@
 		E4B69E1C0A3A1BDC003C02F2 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				1B7154E416EC290000367CFC /* ofxSimpleSerial.cpp */,
+				1B7154E516EC290000367CFC /* ofxSimpleSerial.h */,
+				1B7154E116EC171400367CFC /* Instruction.h */,
+				1B7154E216EC171400367CFC /* Instruction.cpp */,
 				27DA117A1635CC2800F13FE6 /* CLD */,
 				E4B69E1D0A3A1BDC003C02F2 /* main.cpp */,
 				27DA102E1635CB4400F13FE6 /* ofApp.cpp */,
@@ -973,6 +983,8 @@
 				27DA11811635CC2800F13FE6 /* ETF.cpp in Sources */,
 				27DA11821635CC2800F13FE6 /* fdog.cpp in Sources */,
 				037EC33016E1414D0061260C /* arduinoThread.cpp in Sources */,
+				1B7154E316EC171400367CFC /* Instruction.cpp in Sources */,
+				1B7154E616EC290000367CFC /* ofxSimpleSerial.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

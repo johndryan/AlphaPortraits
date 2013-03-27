@@ -52,9 +52,9 @@ public:
     
     ofxSimpleSerial	serial;
     int nInstructions, currentInstruction;
-    float startX, startY, scaleFactor;
-    bool currentlyPlotting, plotterReady, runOnTimer;
-    string      message;
+    float startX, startY, scaleFactor, max_X, min_X, max_Y, min_Y;
+    bool currentlyPlotting, plotterReady, runOnTimer, firstLastDraw, randomLoc;
+    string      message, serialID;
     void		onNewMessage(string & message);
     
     ofTrueTypeFont font;
