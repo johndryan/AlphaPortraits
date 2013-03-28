@@ -4,6 +4,10 @@
 #define DRAWING_PORTRAIT 3
 #define DRAWING_COMPLETE 4
 
+#define PADDING 10
+#define OUTPUT_LARGE_WIDTH 492
+#define OUTPUT_LARGE_HEIGHT 364
+
 #include "testApp.h"
 
 using namespace cv;
@@ -13,10 +17,28 @@ using namespace ofxCv;
 void testApp::setup(){
     // VARIABLES
     currentState = WATCHING_CROWD;
+    currentStateTitle = states[currentState];
+    minCrowdSize = 3;
+    //whichPerson = 0;
+    whichPersonPtr = &whichPerson;
     
     // CONNECTIONS
     tspsReceiver.connect( 12000 );
     ofxAddTSPSListeners(this);
+    people = tspsReceiver.getPeople();
+    currentCrowdSize = people.size();
+    
+    // CONTROL PANEL
+    gui.setup();
+	gui.addPanel("Crowd Settings");
+    
+    vector <guiVariablePointer> vars;
+	vars.push_back( guiVariablePointer("Num People", &currentCrowdSize, GUI_VAR_INT) );
+	vars.push_back( guiVariablePointer("State", &currentStateTitle, GUI_VAR_STRING) );
+    gui.addVariableLister("Crowd Variables", vars);
+    
+    gui.addSlider("minCrowdSize", minCrowdSize, 3, 10, true);
+	gui.loadSettings("crowdsettings.xml");
     
     // DISPLAY
     ofBackground(0);
@@ -24,6 +46,11 @@ void testApp::setup(){
 
 //--------------------------------------------------------------
 void testApp::update(){
+    // Get control panel values ( TODO: everytime? )
+    minCrowdSize = gui.getValueI("minCrowdSize");
+    currentCrowdSize = people.size();
+    currentStateTitle = states[currentState];
+    
     switch (currentState) {
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -31,11 +58,32 @@ void testApp::update(){
         case WATCHING_CROWD:
         {
             // Values come in from TSPS
-            vector<ofxTSPS::Person*> people = tspsReceiver.getPeople();
-            for ( int i=0; i<people.size(); i++){
-                ofLog(OF_LOG_NOTICE, "PERSON");
-            // do stuff for each person!
-            //people[i]->contour...
+            people = tspsReceiver.getPeople();
+            crowd.clear();
+            
+            // If min number present
+            if (people.size() >= minCrowdSize) {
+                
+                for ( int i=0; i<people.size(); i++){
+                    crowd.addVertex(people[i]->centroid.x*(OUTPUT_LARGE_WIDTH-PADDING*2), people[i]->centroid.y*(OUTPUT_LARGE_HEIGHT-PADDING*2));
+                }
+                crowd.close();
+                
+                // Get center and find nearest vertex
+                groupCenter = crowd.getCentroid2D();
+                
+                int leaderPoint = 0;
+                float minDistance = OUTPUT_LARGE_WIDTH;
+                
+                for ( int i=0; i<crowd.size(); i++){
+                    float tempDist = ofDist(groupCenter.x, groupCenter.y, crowd[i].x, crowd[i].y);
+                    if (tempDist < minDistance) {
+                        minDistance = tempDist;
+                        leaderPoint = i;
+                    }
+                }
+
+                leaderOverheadPosition = crowd[leaderPoint];
             }
             // Get directions / clustering
             
@@ -97,13 +145,29 @@ void testApp::update(){
 
 //--------------------------------------------------------------
 void testApp::draw(){
+    // DRAW BASIC LAYOUT
+    ofSetColor(255);
+    ofNoFill();
+    ofRect(0,0,(OUTPUT_LARGE_WIDTH-PADDING*2), (OUTPUT_LARGE_HEIGHT-PADDING*2));
+    
     switch (currentState) {
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
             
         case WATCHING_CROWD:
         {
-            tspsReceiver.draw(ofGetWidth(), ofGetHeight());
+            //tspsReceiver.draw(ofGetWidth()/2-20, ofGetHeight()/2-20);
+            tspsReceiver.draw((OUTPUT_LARGE_WIDTH-PADDING*2), (OUTPUT_LARGE_HEIGHT-PADDING*2));
+            if (crowd.size() > 0) {
+                ofSetColor(0, 0, 255);
+                crowd.draw();
+                ofSetColor(yellowPrint);
+                ofCircle(groupCenter, 15);
+                ofSetColor(255);
+                ofCircle(leaderOverheadPosition, 30);
+                ofSetColor(255);
+                ofCircle(crowd.getClosestPoint(groupCenter), 5);
+            }
         }
         break;
             
@@ -190,14 +254,14 @@ void testApp::dragEvent(ofDragInfo dragInfo){
 
 //--------------------------------------------------------------
 void testApp::onPersonEntered( ofxTSPS::EventArgs & tspsEvent ){
-    ofLog(OF_LOG_NOTICE, "New person!");
+    //ofLog(OF_LOG_NOTICE, "New person!");
     // you can access the person like this:
     // tspsEvent.person
 }
 
 //--------------------------------------------------------------
 void testApp::onPersonUpdated( ofxTSPS::EventArgs & tspsEvent ){
-    ofLog(OF_LOG_NOTICE, "Person updated!");
+    //ofLog(OF_LOG_NOTICE, "Person updated!");
     // you can access the person like this:
     // tspsEvent.person
     
@@ -205,7 +269,7 @@ void testApp::onPersonUpdated( ofxTSPS::EventArgs & tspsEvent ){
 
 //--------------------------------------------------------------
 void testApp::onPersonWillLeave( ofxTSPS::EventArgs & tspsEvent ){
-    ofLog(OF_LOG_NOTICE, "Person left!");
+    //ofLog(OF_LOG_NOTICE, "Person left!");
     // you can access the person like this:
     // tspsEvent.person
     

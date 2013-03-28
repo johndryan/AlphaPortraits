@@ -2,6 +2,7 @@
 
 #include "ofMain.h"
 #include "ofxTSPSReceiver.h"
+#include "ofxAutoControlPanel.h"
 #include "ofxCv.h"
 
 class testApp : public ofBaseApp{
@@ -22,10 +23,18 @@ public:
     void gotMessage(ofMessage msg);
     
     ofxTSPS::Receiver tspsReceiver;
-    
     void onPersonEntered( ofxTSPS::EventArgs & tspsEvent );
     void onPersonUpdated( ofxTSPS::EventArgs & tspsEvent );
     void onPersonWillLeave( ofxTSPS::EventArgs & tspsEvent );
     
-    int currentState;
+    ofxAutoControlPanel gui;
+    ofVec2f vec;
+    
+    int currentState, minCrowdSize, currentCrowdSize;
+    string currentStateTitle;
+    vector<ofxTSPS::Person*> people;
+    ofPoint leaderOverheadPosition, groupCenter;
+    ofPolyline crowd;
+    string states[5] = { "WATCHING CROWD", "CREATING PORTRAIT", "SCROLLPAPER", "DRAWING PORTRAIT", "DRAWING COMPLETE" };
+    
 };
