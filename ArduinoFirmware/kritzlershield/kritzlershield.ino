@@ -48,29 +48,26 @@
 #include <stdlib.h>
 
 
-// distance between both motors (axis) 150 cm // 128.5cm
-#define AXIS_DISTANCE_X 12850
-#define AXIS_DISTANCE_Y 12850
+// distance between both motors (axis) 1924 mm
+#define AXIS_DISTANCE_X 19240
+#define AXIS_DISTANCE_Y 19240
 
 // starting position
-// a = b = 10607 --> 1060.7mm // 910mm
-// m2s = 0.7853982 // 0.03809177875
+// m2s = 0.03809177875
 
-#define START_X 6425 //7500
-#define START_Y 6425 //7500
-#define MIN_X 1500  // 3000
-#define MAX_X 11350 // 9850
-#define MIN_Y 2500  // 3000
-#define MAX_Y 11350 // 9850
+#define START_X 9620
+#define START_Y 9620
+#define MIN_X 5300
+#define MAX_X 13940
+#define MIN_Y 3000
+#define MAX_Y 13500
 
-// pulley radius 10mm // 19.4mm dia = 9.7mm radius (0.764" diameter)
-//#define PULLEY_R 100
+// pulley radius 19.4mm dia = 9.7mm radius (0.764" diameter)
 #define PULLEY_R 97
 #define PI 3.14159
-// circumference 2*PI*r = 62.8 mm // 60.9mm
+// circumference 2*PI*r = 60.9mm
 
-// quarter step, 800 steps per rotation // I'm doing 1/8th steps
-// #define STEPS_PER_ROT 800
+// 800 steps per rotation // I'm doing 1/8th steps
 #define STEPS_PER_ROT 1600
 
 // pen states
