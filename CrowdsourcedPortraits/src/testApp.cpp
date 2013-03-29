@@ -8,6 +8,9 @@
 #define OUTPUT_LARGE_WIDTH 492
 #define OUTPUT_LARGE_HEIGHT 364
 
+#define VIDEO_WIDTH 1920
+#define VIDEO_HEIGTH 1080
+
 #include "testApp.h"
 
 using namespace cv;
@@ -19,8 +22,7 @@ void testApp::setup(){
     currentState = WATCHING_CROWD;
     currentStateTitle = states[currentState];
     minCrowdSize = 3;
-    //whichPerson = 0;
-    whichPersonPtr = &whichPerson;
+    sliceWidth = 200;
     
     // CONNECTIONS
     tspsReceiver.connect( 12000 );
@@ -28,17 +30,27 @@ void testApp::setup(){
     people = tspsReceiver.getPeople();
     currentCrowdSize = people.size();
     
+    // CAMERA & CV
+    //ofSetVerticalSync(true);
+	cam.initGrabber(VIDEO_WIDTH, VIDEO_HEIGTH);
+    classifier.load(ofToDataPath("haarcascade_frontalface_alt2.xml"));
+    scaleFactor = .25;
+    graySmall.allocate(cam.getWidth() * scaleFactor, cam.getHeight() * scaleFactor, OF_IMAGE_GRAYSCALE);
+    
     // CONTROL PANEL
     gui.setup();
-	gui.addPanel("Crowd Settings");
     
+	gui.addPanel("Crowd Settings");
     vector <guiVariablePointer> vars;
 	vars.push_back( guiVariablePointer("Num People", &currentCrowdSize, GUI_VAR_INT) );
 	vars.push_back( guiVariablePointer("State", &currentStateTitle, GUI_VAR_STRING) );
     gui.addVariableLister("Crowd Variables", vars);
-    
     gui.addSlider("minCrowdSize", minCrowdSize, 3, 10, true);
 	gui.loadSettings("crowdsettings.xml");
+
+	gui.addPanel("Face Detect Settings");
+    gui.addSlider("sliceWidth", sliceWidth, 100, 400, true);
+	gui.loadSettings("facesettings.xml");
     
     // DISPLAY
     ofBackground(0);
@@ -50,6 +62,10 @@ void testApp::update(){
     minCrowdSize = gui.getValueI("minCrowdSize");
     currentCrowdSize = people.size();
     currentStateTitle = states[currentState];
+    
+    cam.update();
+    copy(cam, display);
+    display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
     
     switch (currentState) {
             
@@ -65,10 +81,11 @@ void testApp::update(){
             if (people.size() >= minCrowdSize) {
                 
                 for ( int i=0; i<people.size(); i++){
-                    crowd.addVertex(people[i]->centroid.x*(OUTPUT_LARGE_WIDTH-PADDING*2), people[i]->centroid.y*(OUTPUT_LARGE_HEIGHT-PADDING*2));
+                    crowd.addVertex(people[i]->centroid.x*OUTPUT_LARGE_WIDTH, people[i]->centroid.y*OUTPUT_LARGE_HEIGHT);
                 }
                 crowd.close();
                 
+                // TODO: improve clustering and selection of leader
                 // Get center and find nearest vertex
                 groupCenter = crowd.getCentroid2D();
                 
@@ -84,11 +101,8 @@ void testApp::update(){
                 }
 
                 leaderOverheadPosition = crowd[leaderPoint];
+                currentState++;
             }
-            // Get directions / clustering
-            
-            // Individual selected?
-            // currentState++;
         }
         break;
             
@@ -96,17 +110,33 @@ void testApp::update(){
             
         case CREATING_PORTRAIT:
         {
-            // Using webcam, look for face nearest location of Individual
+            if(cam.isFrameNew()) {
+                convertColor(cam, gray, CV_RGB2GRAY);
+                resize(gray, graySmall);
+                Mat graySmallMat = toCv(graySmall);
+                if(ofGetMousePressed()) {
+                    equalizeHist(graySmallMat, graySmallMat);
+                }
+                graySmall.update();
                 
-            // Is there a usable face? If not:
-            // currentState = WATCHING_CROWD;
-            // break;
+                classifier.detectMultiScale(graySmallMat, objects, 1.06, 1,
+                                            //CascadeClassifier::DO_CANNY_PRUNING |
+                                            //CascadeClassifier::FIND_BIGGEST_OBJECT |
+                                            //CascadeClassifier::DO_ROUGH_SEARCH |
+                                            0);
                 
-            // Process image
-            // Do threshoding & look for min percentage black to white?
-                
-            // B&W Image -> Vector graphics (using outlines or fill?)
-            // currentState++;
+                // Using webcam, look for face nearest location of Individual
+                    
+                // Is there a usable face? If not:
+                // currentState = WATCHING_CROWD;
+                // break;
+                    
+                // Process image
+                // Do threshoding & look for min percentage black to white?
+                    
+                // B&W Image -> Vector graphics (using outlines or fill?)
+                // currentState++;
+            }
         }
         break;
             
@@ -148,7 +178,12 @@ void testApp::draw(){
     // DRAW BASIC LAYOUT
     ofSetColor(255);
     ofNoFill();
-    ofRect(0,0,(OUTPUT_LARGE_WIDTH-PADDING*2), (OUTPUT_LARGE_HEIGHT-PADDING*2));
+    ofRect(0,0,OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+    
+    // DRAW CAM ALL THE TIME?
+    //display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
+    tspsReceiver.draw(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+    cam.draw(0,0);
     
     switch (currentState) {
             
@@ -156,8 +191,7 @@ void testApp::draw(){
             
         case WATCHING_CROWD:
         {
-            //tspsReceiver.draw(ofGetWidth()/2-20, ofGetHeight()/2-20);
-            tspsReceiver.draw((OUTPUT_LARGE_WIDTH-PADDING*2), (OUTPUT_LARGE_HEIGHT-PADDING*2));
+            //tspsReceiver.draw(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
             if (crowd.size() > 0) {
                 ofSetColor(0, 0, 255);
                 crowd.draw();
@@ -175,7 +209,17 @@ void testApp::draw(){
             
         case CREATING_PORTRAIT:
         {
-            //
+            
+            ofNoFill();
+            
+            //ofPushMatrix();
+            ofScale(1 / scaleFactor, 1 / scaleFactor);
+            //ofTranslate()
+            for(int i = 0; i < objects.size(); i++) {
+                ofRect(toOf(objects[i]));
+            }
+            //ofPopMatrix()
+            ofDrawBitmapString(ofToString(objects.size()), 10, 20);
         }
         break;
             

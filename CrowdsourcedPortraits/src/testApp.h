@@ -28,9 +28,15 @@ public:
     void onPersonWillLeave( ofxTSPS::EventArgs & tspsEvent );
     
     ofxAutoControlPanel gui;
-    ofVec2f vec;
     
-    int currentState, minCrowdSize, currentCrowdSize;
+    ofVideoGrabber cam;
+    ofImage display, gray, graySmall;
+	
+	cv::CascadeClassifier classifier;
+	vector<cv::Rect> objects;
+	float scaleFactor;
+    
+    int currentState, minCrowdSize, currentCrowdSize, sliceWidth;
     string currentStateTitle;
     vector<ofxTSPS::Person*> people;
     ofPoint leaderOverheadPosition, groupCenter;
