@@ -81,9 +81,9 @@
 // delay to wait for the pen to go up or down
 #define PEN_DELAY 1000
 
-// default speed //16
-#define PAUSE_DELAY 1
-#define PAUSE_INCREASE_FOR_M3 1
+// default speed
+#define PAUSE_DELAY 8
+#define PAUSE_INCREASE_FOR_M3 2
 
 // possible commands
 #define CMD_NONE 0
@@ -207,7 +207,7 @@ void setup() {
   // 2MHz / 256 = 7812.5 Hz
   TCCR2A = 0;           // normal operation                                                  
   TCCR2B = (1<<CS21);   // prescaler 8                                             
-  //TCCR2B = (1<<CS20);   // prescaler 32
+  TCCR2B = (1<<CS20);   // prescaler 32
   TIMSK2 = (1<<TOIE2);  // enable overflow interrupt                                         
 
   while (Serial.available()) {
@@ -291,7 +291,7 @@ ISR(TIMER2_OVF_vect) {
       if (cmd == CMD_CHAR_PAPER_DOWN || cmd == CMD_CHAR_PAPER_UP) {
         dM3 = MOVE_PAPER_BY / 8 * STEPS_PER_ROT;
 	digitalWrite(DIR_PIN_M3, (cmd == CMD_CHAR_PAPER_DOWN) ? DIR_DOWN : DIR_UP);
-        increaseSpeed = ;
+        increaseSpeed = 4;
       }
       // ... but move the pen up or down before, if needed
       switch (cmd) {
