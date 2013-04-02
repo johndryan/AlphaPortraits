@@ -2,6 +2,7 @@
 #define MOVE_REL 1
 #define LINE_ABS 2
 #define LINE_REL 3
+#define SCROLL_PAPER 4
 
 #include "ofApp.h"
 
@@ -84,11 +85,11 @@ vector<Instruction> instructions;
 
 //--------------------------------------------------------------
 void ofApp::setup() {
-    min_X = 1500;
-    max_X = 11350;
-    min_Y = 2500;
-    max_Y = 11350;
-    scaleFactor = 10;
+    min_X = 5300;
+    max_X = 13940;
+    min_Y = 3000;
+    max_Y = 13500;
+    scaleFactor = 20;
     currentlyPlotting = false;
     plotterReady = false;
     currentInstruction = 0;
@@ -143,11 +144,11 @@ void ofApp::setup() {
     gui.loadSettings("printvariables.xml");
     
     gui.addPanel("Calibration");
-    gui.addSlider("SCALE", 10, 1, 20, true);
-    gui.addSlider("home_x", 6425, min_X, max_X, true);
-    gui.addSlider("home_y", 6425, min_Y, max_Y, true);
-    gui.addSlider("startX", 6000, min_X, max_X, true);
-    gui.addSlider("startY", 6000, min_Y, max_Y, true);
+    gui.addSlider("SCALE", 20, 1, 40, true);
+    gui.addSlider("home_x", 9620, min_X, max_X, true);
+    gui.addSlider("home_y", 9620, min_Y, max_Y, true);
+    gui.addSlider("startX", 5500, min_X, max_X, true);
+    gui.addSlider("startY", 3500, min_Y, max_Y, true);
     // Add Booleans as buttons?
     gui.loadSettings("calibration.xml");
     
@@ -221,6 +222,8 @@ cam.update();
             minPathLength = gui.getValueI("minPathLength");
             float facePadding = gui.getValueF("facePadding");
             int verticalOffset = gui.getValueI("verticalOffset");
+            
+            scaleFactor = gui.getValueI("SCALE");
             
             convertColor(cam, gray, CV_RGB2GRAY);
             
@@ -388,6 +391,7 @@ void ofApp::pathsToInstructions() {
     float startY = gui.getValueF("startY");
     float home_x = gui.getValueF("home_x");
     float home_y = gui.getValueF("home_y");
+    scaleFactor = gui.getValueI("SCALE");
     
     if (randomLoc) {
         startX = ofRandom(min_X, (max_X-croppedSize*scaleFactor));
@@ -395,6 +399,9 @@ void ofApp::pathsToInstructions() {
     }
     if (instructions.size()>0) instructions.erase(instructions.begin());
     cout << "--PATHS TO INSTRUCTIONS\n";
+    // SCROLL PAPER
+    instructions.push_back(Instruction(SCROLL_PAPER, 0, 0));
+    
     // MOVE TO START:
     ofVec2f startPoint = paths[0].getVertices()[0];
     instructions.push_back(Instruction(MOVE_ABS, startPoint.x*scaleFactor + startX, startPoint.y*scaleFactor + startY));
