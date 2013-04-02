@@ -144,10 +144,10 @@ void ofApp::setup() {
     gui.loadSettings("printvariables.xml");
     
     gui.addPanel("Calibration");
-    gui.addSlider("SCALE", 20, 1, 40, true);
+    gui.addSlider("SCALE", 24, 1, 40, true);
     gui.addSlider("home_x", 9620, min_X, max_X, true);
     gui.addSlider("home_y", 9620, min_Y, max_Y, true);
-    gui.addSlider("startX", 5500, min_X, max_X, true);
+    gui.addSlider("startX", 6500, min_X, max_X, true);
     gui.addSlider("startY", 3500, min_Y, max_Y, true);
     // Add Booleans as buttons?
     gui.loadSettings("calibration.xml");
