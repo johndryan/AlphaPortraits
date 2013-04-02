@@ -76,8 +76,8 @@
 // pen states
 #define PEN_UP 0
 #define PEN_DOWN 1
-#define PEN_UP_POS 75
-#define PEN_DOWN_POS 10
+#define PEN_UP_POS 115
+#define PEN_DOWN_POS 155
 // delay to wait for the pen to go up or down
 #define PEN_DELAY 1000
 
