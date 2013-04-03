@@ -5,6 +5,11 @@
 #include "ofxAutoControlPanel.h"
 #include "ofxCv.h"
 
+#include "imatrix.h"
+#include "ETF.h"
+#include "fdog.h"
+#include "myvec.h"
+
 class testApp : public ofBaseApp{
     
 public:
@@ -30,13 +35,17 @@ public:
     ofxAutoControlPanel gui;
     
     ofVideoGrabber cam;
-    ofImage display, gray, graySmall;
+    ofImage display, gray, graySmall, face;
+	ofImage cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray;
+    imatrix img;
+	ETF etf;
+	ofxCv::ContourFinder contourFinder;
 	
 	cv::CascadeClassifier classifier;
 	vector<cv::Rect> objects;
 	float scaleFactor;
     
-    int currentState, minCrowdSize, currentCrowdSize, sliceWidth;
+    int currentState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize;
     string currentStateTitle;
     vector<ofxTSPS::Person*> people;
     ofPoint leaderOverheadPosition, groupCenter;
