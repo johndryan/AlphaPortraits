@@ -102,6 +102,7 @@ void testApp::update(){
 
                 leaderOverheadPosition = crowd[leaderPoint];
                 currentState++;
+                ofLog(OF_LOG_NOTICE, "== STATE: CREATING PORTRAIT ==");
             }
         }
         break;
@@ -135,7 +136,8 @@ void testApp::update(){
                 // Do threshoding & look for min percentage black to white?
                     
                 // B&W Image -> Vector graphics (using outlines or fill?)
-                // currentState++;
+                currentState++;
+                ofLog(OF_LOG_NOTICE, "== STATE: SCROLLING PAPER ==");
             }
         }
         break;
@@ -147,6 +149,7 @@ void testApp::update(){
             // Scroll the paper into place
             // Delay until complete
             // currentState++;
+            // ofLog(OF_LOG_NOTICE, "== STATE: DRAWING PORTRAIT ==");
         }
         break;
             
@@ -157,6 +160,7 @@ void testApp::update(){
             // Do the drawing
             // When complete
             // currentState++;
+            // ofLog(OF_LOG_NOTICE, "== STATE: DRAWING COMPLETE ==");
         }
         break;
             
@@ -170,7 +174,10 @@ void testApp::update(){
         break;
     }
     // COMPLETE? THEN START OVER
-    if (currentState > DRAWING_COMPLETE) currentState = WATCHING_CROWD;
+    if (currentState > DRAWING_COMPLETE) {
+        currentState = WATCHING_CROWD;
+        ofLog(OF_LOG_NOTICE, "== STATE: WATCHING CROWD ==");
+    }
 }
 
 //--------------------------------------------------------------
@@ -253,7 +260,23 @@ void testApp::draw(){
 
 //--------------------------------------------------------------
 void testApp::keyPressed(int key){
-    
+    switch (key) {
+        case '1':
+            currentState = WATCHING_CROWD;
+            break;
+        case '2':
+            currentState = CREATING_PORTRAIT;
+            break;
+        case '3':
+            currentState = SCROLLPAPER;
+            break;
+        case '4':
+            currentState = DRAWING_PORTRAIT;
+            break;
+        case '5':
+            currentState = DRAWING_COMPLETE;
+            break;
+    }
 }
 
 //--------------------------------------------------------------
