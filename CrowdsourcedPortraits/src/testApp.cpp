@@ -80,6 +80,7 @@ void testApp::setup(){
 	imitate(thresholded, face);
 	imitate(thinned, face);
 	imitate(croppedBackground, face);
+    imitate(faceThresholded, face);
     
 	contourFinder.setMinAreaRadius(CONTOUR_MIN_AREA);
 	contourFinder.setMaxAreaRadius(croppedFaceSize*3/4);
@@ -113,12 +114,13 @@ void testApp::setup(){
 	gui.loadSettings("facesettings.xml");
     
     gui.addPanel("Background Subtraction");
-    gui.addToggle("backgroundSubtraction", true);
+    gui.addToggle("backgroundSubtraction", false);
     gui.addSlider("backgroundThresholdValue", backgroundThresholdValue, 0, 255, true);
     gui.addSlider("backgroundLearningTime", backgroundLearningTime, 100, 1500, true);
     gui.loadSettings("contoursettings.xml");
     
     gui.addPanel("Shading Settings");
+	gui.addSlider("shadingThresh", 5, 0, 255, false);
     gui.addSlider("contourThreshold", 0, 0, 255, true);
     gui.addSlider("contourMinAreaRadius", CONTOUR_MIN_AREA, 1, 50, true);
     gui.addSlider("contourMaxAreaRadius", croppedFaceSize*3/4, croppedFaceSize/2, croppedFaceSize, true);
@@ -213,6 +215,7 @@ void testApp::update(){
                 //minPathLength = gui.getValueI("minPathLength");
                 float facePadding = gui.getValueF("facePadding");
                 int verticalOffset = gui.getValueI("verticalOffset");
+                int shadeThres = gui.getValueF("shadingThresh");
                 
                 contourFinder.setMinAreaRadius(gui.getValueI("contourMinAreaRadius"));
                 contourFinder.setMaxAreaRadius(gui.getValueI("contourMaxAreaRadius"));
@@ -315,10 +318,13 @@ void testApp::update(){
                 cld.update();
                 thresholded.update();
                 thinned.update();
-                    
+                
+                threshold(face, faceThresholded, shadeThres, true);
+                faceThresholded.update();
+                
                 //contourFinder.setThreshold(ofMap(mouseX, 0, ofGetWidth(), 0, 255));
                 contourFinder.setAutoThreshold(true);
-                contourFinder.findContours(thresholded);
+                contourFinder.findContours(faceThresholded);
                 int n = contourFinder.size();
                 
                 shading.clear();
@@ -414,15 +420,14 @@ void testApp::draw(){
     display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
     if (backgroundSubtraction) backgroundSub.draw((OUTPUT_LARGE_WIDTH+PADDING)*2, 0);
     face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    croppedBackground.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    faceThresholded.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     cld.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    croppedBackground.draw(CROPPED_FACE_SIZE + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     //thinned.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     
-    
-    
     //int n = contourFinder.size();
-    ofTranslate(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING);
+    ofTranslate(CROPPED_FACE_SIZE*1.5 + PADDING*3, OUTPUT_LARGE_HEIGHT+PADDING);
     thinned.draw(0,0);
     
 //    for(int i = 0; i < n; i++) {

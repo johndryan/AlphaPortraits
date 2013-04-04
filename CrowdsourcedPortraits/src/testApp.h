@@ -37,7 +37,7 @@ public:
     
     ofVideoGrabber cam;
 	ofxCv::RunningBackground background;
-    ofImage display, gray, graySmall, face;
+    ofImage display, gray, graySmall, face, faceThresholded;
 	ofImage backgroundSub, cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray, croppedBackground;
     imatrix img;
 	ETF etf;
