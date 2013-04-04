@@ -41,7 +41,7 @@ public:
 	ofImage backgroundSub, cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray, croppedBackground;
     imatrix img;
 	ETF etf;
-	ofxCv::ContourFinder contourFinder;
+	ofxCv::ContourFinder contourFinder, backgroundContourFinder;
 	
 	cv::CascadeClassifier classifier;
 	vector<cv::Rect> objects;

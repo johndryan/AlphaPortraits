@@ -86,6 +86,10 @@ void testApp::setup(){
 	contourFinder.setMaxAreaRadius(croppedFaceSize*3/4);
     contourFinder.setFindHoles(true);
     contourFinder.setSimplify(true);
+    backgroundContourFinder.setMinAreaRadius(100);
+    backgroundContourFinder.setMaxAreaRadius(croppedFaceSize);
+    backgroundContourFinder.setSimplify(true);
+    backgroundContourFinder.setInvert(true);
     
     // CONTROL PANEL
     gui.setup();
@@ -289,9 +293,30 @@ void testApp::update(){
                 unsigned char* backgroundPixels = croppedBackground.getPixels();
                 for(int y = 0; y < croppedFaceSize; y++) {
                     for(int x = 0; x < croppedFaceSize; x++) {
-                        img[x][y] = grayPixels[j++];
+//                        img[x][y] = grayPixels[j++] - black;
+                        int colorVal = grayPixels[j] - black;
+                        if (backgroundSubtraction && backgroundPixels[j] < colorVal) {
+                            img[x][y] = backgroundPixels[j];
+                        } else {
+                            img[x][y] = colorVal;
+                        }
+                        j++;
                     }
                 }
+                
+                // Use a blob of background subtraction to delete elements around the edge
+//                for(int i = 0; i < backgroundContourFinder.size(); i++) {
+//                    ofPolyline blob = backgroundContourFinder.getPolyline(i);
+//                    for(int y = 0; y < croppedFaceSize; y++) {
+//                        for(int x = 0; x < croppedFaceSize; x++) {
+//                            if (backgroundSubtraction && img[x][y] < 0 && blob.inside(x, y)) {
+//                                img[x][y] = 255;
+//                                ofLog(OF_LOG_NOTICE) << "Changing color of " << x << "," << y;
+//                            }
+//                        }
+//                    }
+//                }
+                
                 etf.init(croppedFaceSize, croppedFaceSize);
                 etf.set(img);
                 etf.Smooth(halfw, smoothPasses);
@@ -300,13 +325,14 @@ void testApp::update(){
                 unsigned char* cldPixels = cld.getPixels();
                 for(int y = 0; y < croppedFaceSize; y++) {
                     for(int x = 0; x < croppedFaceSize; x++) {
-                        int colorVal = img[x][y];
-                        if (backgroundSubtraction && backgroundPixels[j] < colorVal) {
-                            cldPixels[j] = 255 - backgroundPixels[j];
-                        } else {
-                            cldPixels[j] = colorVal;
-                        }
-                        j++;
+                        cldPixels[j++] = img[x][y];
+//                        int colorVal = img[x][y];
+//                        if (backgroundSubtraction && backgroundPixels[j] < colorVal) {
+//                            cldPixels[j] = 255 - backgroundPixels[j];
+//                        } else {
+//                            cldPixels[j] = colorVal;
+//                        }
+//                        j++;
                     }
                 }
                 threshold(cld, thresholded, thresh, true);
@@ -322,7 +348,9 @@ void testApp::update(){
                 threshold(face, faceThresholded, shadeThres, true);
                 faceThresholded.update();
                 
-                //contourFinder.setThreshold(ofMap(mouseX, 0, ofGetWidth(), 0, 255));
+                backgroundContourFinder.setAutoThreshold(true);
+                backgroundContourFinder.findContours(croppedBackground);
+                
                 contourFinder.setAutoThreshold(true);
                 contourFinder.findContours(faceThresholded);
                 int n = contourFinder.size();
@@ -443,7 +471,12 @@ void testApp::draw(){
     for(int i = 0; i < shading.size(); i++) {
         shading[i].draw();
     }
-    
+    ofSetColor(0, 255, 0);
+    for(int i = 0; i < backgroundContourFinder.size(); i++) {
+        ofPolyline blob = backgroundContourFinder.getPolyline(i);
+        blob.draw();
+    }
+    //backgroundContourFinder.draw();
     //tspsReceiver.draw(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
     //cam.draw(0,0);
     
