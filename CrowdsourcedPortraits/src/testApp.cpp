@@ -51,6 +51,8 @@ void testApp::setup(){
     currentStateTitle = states[currentState];
     minCrowdSize = 3;
     sliceWidth = 200;
+    backgroundLearningTime = 900;
+    backgroundThresholdValue = 10;
     
     // CONNECTIONS
     tspsReceiver.connect( 12000 );
@@ -65,7 +67,11 @@ void testApp::setup(){
     
     //ofSetVerticalSync(true);
 	cam.initGrabber(VIDEO_WIDTH, VIDEO_HEIGTH);
+	background.setLearningTime(backgroundLearningTime);
+	background.setThresholdValue(backgroundThresholdValue);
     classifier.load(ofToDataPath("haarcascade_frontalface_alt2.xml"));
+    display.allocate(VIDEO_WIDTH, VIDEO_HEIGTH, OF_IMAGE_COLOR);
+    backgroundSub.allocate(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT, OF_IMAGE_COLOR);
     graySmall.allocate(cam.getWidth() * scaleFactor, cam.getHeight() * scaleFactor, OF_IMAGE_GRAYSCALE);
 	face.allocate(croppedFaceSize, croppedFaceSize, OF_IMAGE_GRAYSCALE);
 	img.init(croppedFaceSize, croppedFaceSize);
@@ -73,6 +79,7 @@ void testApp::setup(){
 	imitate(cld, face);
 	imitate(thresholded, face);
 	imitate(thinned, face);
+	imitate(croppedBackground, face);
     
 	contourFinder.setMinAreaRadius(CONTOUR_MIN_AREA);
 	contourFinder.setMaxAreaRadius(croppedFaceSize*3/4);
@@ -105,7 +112,13 @@ void testApp::setup(){
     gui.addSlider("verticalOffset", int(-croppedFaceSize/24), int(-croppedFaceSize/2), int(croppedFaceSize/2), false);
 	gui.loadSettings("facesettings.xml");
     
-    gui.addPanel("Contour Settings");
+    gui.addPanel("Background Subtraction");
+    gui.addToggle("backgroundSubtraction", true);
+    gui.addSlider("backgroundThresholdValue", backgroundThresholdValue, 0, 255, true);
+    gui.addSlider("backgroundLearningTime", backgroundLearningTime, 100, 1500, true);
+    gui.loadSettings("contoursettings.xml");
+    
+    gui.addPanel("Shading Settings");
     gui.addSlider("contourThreshold", 0, 0, 255, true);
     gui.addSlider("contourMinAreaRadius", CONTOUR_MIN_AREA, 1, 50, true);
     gui.addSlider("contourMaxAreaRadius", croppedFaceSize*3/4, croppedFaceSize/2, croppedFaceSize, true);
@@ -123,6 +136,17 @@ void testApp::update(){
     minCrowdSize = gui.getValueI("minCrowdSize");
     currentCrowdSize = people.size();
     currentStateTitle = states[currentState];
+    backgroundSubtraction = gui.getValueB("backgroundSubtraction");
+	background.setLearningTime(gui.getValueI("backgroundLearningTime"));
+	background.setThresholdValue(gui.getValueI("backgroundThresholdValue"));
+    if (backgroundSubtraction) {
+        cam.update();
+        copy(cam, display);
+        display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+        
+        background.update(display, backgroundSub);
+        backgroundSub.update();
+    }
     
     switch (currentState) {
             
@@ -170,9 +194,12 @@ void testApp::update(){
         {
             // Most of this OpenCV stuff is taken from: http://github.com/kylemcdonald/BaristaBot
             
-            cam.update();
-            copy(cam, display);
-            display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+            
+            if (!backgroundSubtraction) {
+                cam.update();
+                copy(cam, display);
+                display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+            }
             
             if(cam.isFrameNew()) {
                 int black = gui.getValueI("black");
@@ -192,12 +219,10 @@ void testApp::update(){
                 contourFinder.setFindHoles(gui.getValueB("contourFindHoles"));
                 contourFinder.setSimplify(gui.getValueB("contourSimplify"));
                 
-                // TODO: Set OpenCV ROI by information from overhead cam
-                
-                // TODO: Background subtraction to clean up?
-                
                 convertColor(cam, gray, CV_RGB2GRAY);
                 resize(gray, graySmall);
+                
+                // TODO: Set OpenCV ROI by information from overhead cam
                 Mat graySmallMat = toCv(graySmall);
                 equalizeHist(graySmallMat, graySmallMat);
                 graySmall.update(); // TODO: Needed ??
@@ -239,13 +264,29 @@ void testApp::update(){
                 Mat grayMat = toCv(gray);
                 Mat croppedGrayMat(grayMat, roi);
                 resize(croppedGrayMat, face);
+                
+                if (backgroundSubtraction) {
+                    ofRectangle backRect;
+                    backRect.x = faceRect.x*OUTPUT_LARGE_WIDTH/VIDEO_WIDTH;
+                    backRect.y = faceRect.y*OUTPUT_LARGE_HEIGHT/VIDEO_HEIGTH;
+                    backRect.width = faceRect.width*OUTPUT_LARGE_WIDTH/VIDEO_WIDTH;
+                    backRect.height = faceRect.height*OUTPUT_LARGE_HEIGHT/VIDEO_HEIGTH;
+                    
+                    cv::Rect roiScaled = toCv(backRect);
+                    Mat backgroundMat = toCv(backgroundSub);
+                    Mat croppedBackMat(backgroundMat, roiScaled);
+                    resize(croppedBackMat, croppedBackground);
+                    croppedBackground.update();
+                }
+                
                 face.update();
                 
                 int j = 0;
                 unsigned char* grayPixels = face.getPixels();
+                unsigned char* backgroundPixels = croppedBackground.getPixels();
                 for(int y = 0; y < croppedFaceSize; y++) {
                     for(int x = 0; x < croppedFaceSize; x++) {
-                        img[x][y] = grayPixels[j++] - black;
+                        img[x][y] = grayPixels[j++];
                     }
                 }
                 etf.init(croppedFaceSize, croppedFaceSize);
@@ -256,7 +297,13 @@ void testApp::update(){
                 unsigned char* cldPixels = cld.getPixels();
                 for(int y = 0; y < croppedFaceSize; y++) {
                     for(int x = 0; x < croppedFaceSize; x++) {
-                        cldPixels[j++] = img[x][y];
+                        int colorVal = img[x][y];
+                        if (backgroundSubtraction && backgroundPixels[j] < colorVal) {
+                            cldPixels[j] = 255 - backgroundPixels[j];
+                        } else {
+                            cldPixels[j] = colorVal;
+                        }
+                        j++;
                     }
                 }
                 threshold(cld, thresholded, thresh, true);
@@ -365,9 +412,11 @@ void testApp::draw(){
     
     // DRAW ALL THE TIME
     display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
+    if (backgroundSubtraction) backgroundSub.draw((OUTPUT_LARGE_WIDTH+PADDING)*2, 0);
     face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    cld.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    croppedBackground.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    cld.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     //thinned.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     
     
@@ -476,6 +525,9 @@ void testApp::keyPressed(int key){
             break;
         case '5':
             currentState = DRAWING_COMPLETE;
+            break;
+        case 'b':
+            background.reset();
             break;
     }
 }

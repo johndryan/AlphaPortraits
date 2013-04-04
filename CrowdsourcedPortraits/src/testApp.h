@@ -36,8 +36,9 @@ public:
     ofxAutoControlPanel gui;
     
     ofVideoGrabber cam;
+	ofxCv::RunningBackground background;
     ofImage display, gray, graySmall, face;
-	ofImage cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray;
+	ofImage backgroundSub, cld, thresholded, thinned, io, jk, nm, sourceImg, sourceImgGray, croppedBackground;
     imatrix img;
 	ETF etf;
 	ofxCv::ContourFinder contourFinder;
@@ -45,8 +46,9 @@ public:
 	cv::CascadeClassifier classifier;
 	vector<cv::Rect> objects;
 	float scaleFactor;
+    bool backgroundSubtraction;
     
-    int currentState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize;
+    int currentState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize, backgroundThresholdValue, backgroundLearningTime;
     string currentStateTitle;
     vector<ofxTSPS::Person*> people;
     ofPoint leaderOverheadPosition, groupCenter;
