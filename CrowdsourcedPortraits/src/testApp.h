@@ -4,6 +4,7 @@
 #include "ofxTSPSReceiver.h"
 #include "ofxAutoControlPanel.h"
 #include "ofxCv.h"
+#include "ofMath.h"
 
 #include "imatrix.h"
 #include "ETF.h"
@@ -52,4 +53,7 @@ public:
     ofPolyline crowd;
     string states[5] = { "WATCHING CROWD", "CREATING PORTRAIT", "SCROLLPAPER", "DRAWING PORTRAIT", "DRAWING COMPLETE" };
     
+    vector<ofPolyline> shading;
+    vector<ofPoint> linePoints;
+    ofTessellator tess;
 };

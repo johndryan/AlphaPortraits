@@ -11,9 +11,10 @@
 #define VIDEO_WIDTH 1920
 #define VIDEO_HEIGTH 1080
 
-#define SCALE_FACTOR 0.1
+#define CV_SCALE_FACTOR 0.3
 #define CROPPED_FACE_SIZE 512
-#define CONTOUR_MIN_AREA 5
+#define CONTOUR_MIN_AREA 3
+#define SHADING_RES 10
 
 #include "testApp.h"
 
@@ -38,6 +39,12 @@ void removeIslands(ofPixels& img) {
 }
 
 //--------------------------------------------------------------
+
+bool sortByX( ofPoint a, ofPoint b){
+    return a.x < b.x;
+}
+
+//--------------------------------------------------------------
 void testApp::setup(){
     // VARIABLES
     currentState = WATCHING_CROWD;
@@ -52,7 +59,7 @@ void testApp::setup(){
     currentCrowdSize = people.size();
     
     // CAMERA & CV
-    scaleFactor = SCALE_FACTOR;
+    scaleFactor = CV_SCALE_FACTOR;
 	croppedFaceSize = CROPPED_FACE_SIZE;
     // TODO: Make face non-square?
     
@@ -69,6 +76,8 @@ void testApp::setup(){
     
 	contourFinder.setMinAreaRadius(CONTOUR_MIN_AREA);
 	contourFinder.setMaxAreaRadius(croppedFaceSize*3/4);
+    contourFinder.setFindHoles(true);
+    contourFinder.setSimplify(true);
     
     // CONTROL PANEL
     gui.setup();
@@ -92,13 +101,17 @@ void testApp::setup(){
 	gui.addSlider("thresh", 121.8, 0, 255, false);
 	//gui.addSlider("minGapLength", 5.5, 2, 12, false);
 	//gui.addSlider("minPathLength", 40, 0, 50, true);
-	gui.addSlider("facePadding", 1.5, 0, 2, false); 
-    gui.addSlider("verticalOffset", int(-croppedFaceSize/12), int(-croppedFaceSize/2), int(croppedFaceSize/2), false);
-    
-    gui.addSlider("contourThreshold", 0, 0, 255, true);
-    gui.addSlider("contourMinAreaRadius", 5, 1, 50, true);
-    gui.addSlider("contourMaxAreaRadius", croppedFaceSize*3/4, croppedFaceSize/2, croppedFaceSize, true);
+	gui.addSlider("facePadding", 1.4, 0, 2, false);
+    gui.addSlider("verticalOffset", int(-croppedFaceSize/24), int(-croppedFaceSize/2), int(croppedFaceSize/2), false);
 	gui.loadSettings("facesettings.xml");
+    
+    gui.addPanel("Contour Settings");
+    gui.addSlider("contourThreshold", 0, 0, 255, true);
+    gui.addSlider("contourMinAreaRadius", CONTOUR_MIN_AREA, 1, 50, true);
+    gui.addSlider("contourMaxAreaRadius", croppedFaceSize*3/4, croppedFaceSize/2, croppedFaceSize, true);
+    gui.addToggle("contourFindHoles", true);
+    gui.addToggle("contourSimplify", true);
+	gui.loadSettings("contoursettings.xml");
     
     // DISPLAY
     ofBackground(0);
@@ -176,6 +189,8 @@ void testApp::update(){
                 
                 contourFinder.setMinAreaRadius(gui.getValueI("contourMinAreaRadius"));
                 contourFinder.setMaxAreaRadius(gui.getValueI("contourMaxAreaRadius"));
+                contourFinder.setFindHoles(gui.getValueB("contourFindHoles"));
+                contourFinder.setSimplify(gui.getValueB("contourSimplify"));
                 
                 // TODO: Set OpenCV ROI by information from overhead cam
                 
@@ -199,7 +214,7 @@ void testApp::update(){
                     currentState = 10;
                     break;
                 } else {
-                    ofLog(OF_LOG_NOTICE, "---- Face Found ----");
+                    ofLog(OF_LOG_NOTICE, "  ---- Face Found ----");
                     faceRect = toOf(objects[0]);
                     faceRect.getPositionRef() /= scaleFactor;
                     faceRect.scale(1 / scaleFactor);
@@ -254,8 +269,44 @@ void testApp::update(){
                 thresholded.update();
                 thinned.update();
                     
-                contourFinder.setThreshold(ofMap(mouseX, 0, ofGetWidth(), 0, 255));
+                //contourFinder.setThreshold(ofMap(mouseX, 0, ofGetWidth(), 0, 255));
+                contourFinder.setAutoThreshold(true);
                 contourFinder.findContours(thresholded);
+                int n = contourFinder.size();
+                
+                shading.clear();
+                
+                // Create Shading
+                ofLog(OF_LOG_NOTICE, "  ---- Create Shading ----");
+                for (int i = 0; i < croppedFaceSize*2/SHADING_RES; i++) {
+                    ofPoint lineStart = ofPoint(0, i * SHADING_RES);
+                    ofPoint lineEnd = ofPoint(i * SHADING_RES, 0);
+
+                    for(int i = 0; i < n; i++) {
+                        linePoints.clear();
+                        
+                        ofPolyline blob = contourFinder.getPolyline(i).getSmoothed(n/10);
+                        for(int i = 1; i < blob.size(); i++) {
+                            ofPoint intersection;
+                            ofPoint line2start = ofPoint(blob[i-1].x,blob[i-1].y);
+                            ofPoint line2end = ofPoint(blob[i].x,blob[i].y);
+                            if (ofLineSegmentIntersection(lineStart, lineEnd, line2start, line2end, intersection)) {
+                                linePoints.push_back(intersection);
+                            }
+                        }
+                        
+                        ofSort(linePoints, sortByX);
+                        
+                        for(int i = 0; i < linePoints.size(); i+=2) {
+                            if (i+1 < linePoints.size()) {
+                                ofPolyline line;
+                                line.addVertex(linePoints[i]);
+                                line.addVertex(linePoints[i+1]);
+                                shading.push_back(line);
+                            }
+                        }
+                    }
+                }
                 
                 // Do threshoding & look for min percentage black to white?
                     
@@ -314,13 +365,30 @@ void testApp::draw(){
     
     // DRAW ALL THE TIME
     display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
-    face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING);
-    int x = 0;
-    cld.draw((x+=face.getHeight()), OUTPUT_LARGE_HEIGHT+PADDING);
-    thresholded.draw((x+=cld.getHeight()), OUTPUT_LARGE_HEIGHT+PADDING);
-    thinned.draw((x+=thresholded.getHeight()), OUTPUT_LARGE_HEIGHT+PADDING);
+    face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    cld.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+    //thinned.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
     
-	contourFinder.draw();
+    
+    
+    //int n = contourFinder.size();
+    ofTranslate(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING);
+    thinned.draw(0,0);
+    
+//    for(int i = 0; i < n; i++) {
+//        ofPolyline blob = contourFinder.getPolyline(i);
+//        ofSetColor(255,0,0);
+//        blob.draw();
+//        ofSetColor(255,255,255);
+//        blob.getSmoothed(n/10).draw();
+//        //ofxCvBlob blob = contourFinder.blobs.at(i);
+//        // do something fun with blob
+//    }
+    ofSetColor(255,0,0);
+    for(int i = 0; i < shading.size(); i++) {
+        shading[i].draw();
+    }
     
     //tspsReceiver.draw(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
     //cam.draw(0,0);
