@@ -1,8 +1,9 @@
 #define WATCHING_CROWD 0
 #define CREATING_PORTRAIT 1
-#define SCROLLPAPER 2
-#define DRAWING_PORTRAIT 3
-#define DRAWING_COMPLETE 4
+#define CONFIRM_PORTRAIT 2
+#define SCROLLPAPER 3
+#define DRAWING_PORTRAIT 4
+#define DRAWING_COMPLETE 5
 
 #define PADDING 10
 #define OUTPUT_LARGE_WIDTH 492
@@ -393,10 +394,19 @@ void testApp::update(){
                     
                 // B&W Image -> Vector graphics (using outlines or fill?)
                 currentState++;
-                ofLog(OF_LOG_NOTICE, "== STATE: SCROLLING PAPER ==");
+                ofLog(OF_LOG_NOTICE, "== STATE: AWAITING PORTRAIT CONFIRMATION ==");
             }
         }
         break;
+            
+            // - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            
+        case CONFIRM_PORTRAIT:
+        {
+            // Check the portrait
+            // currentState++;
+            //ofLog(OF_LOG_NOTICE, "== STATE: SCROLLING PAPER ==");
+        }
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
             
@@ -556,12 +566,15 @@ void testApp::keyPressed(int key){
             currentState = CREATING_PORTRAIT;
             break;
         case '3':
-            currentState = SCROLLPAPER;
+            currentState = CONFIRM_PORTRAIT;
             break;
         case '4':
-            currentState = DRAWING_PORTRAIT;
+            currentState = SCROLLPAPER;
             break;
         case '5':
+            currentState = DRAWING_PORTRAIT;
+            break;
+        case '6':
             currentState = DRAWING_COMPLETE;
             break;
         case 'b':
