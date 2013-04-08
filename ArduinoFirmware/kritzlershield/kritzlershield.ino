@@ -48,17 +48,17 @@
 #include <stdlib.h>
 
 
-// distance between both motors (axis) 1924 mm
-#define AXIS_DISTANCE_X 19240
-#define AXIS_DISTANCE_Y 19240
+// distance between both motors (axis) 1930 mm
+#define AXIS_DISTANCE_X 19300
+#define AXIS_DISTANCE_Y 19300
 
 // starting position
 // m2s = 0.03809177875
 
-#define START_X 9620
-#define START_Y 9620
+#define START_X 9650
+#define START_Y 9650
 #define MIN_X 5300
-#define MAX_X 13940
+#define MAX_X 14000
 #define MIN_Y 3000
 #define MAX_Y 13500
 
