@@ -187,7 +187,8 @@ void testApp::setup(){
 	vars.push_back( guiVariablePointer("State", &currentStateTitle, GUI_VAR_STRING) );
     gui.addVariableLister("Crowd Variables", vars);
     gui.addSlider("minCrowdSize", minCrowdSize, 2, 10, true);
-    gui.addSlider("roiSize", 75, 25, 400, true);
+    gui.addSlider("roiSize", 100, 25, 400, true);
+    gui.addSlider("roiHeightDec", 0, 120, OUTPUT_LARGE_HEIGHT/2, true);
     gui.addSlider("leftCamCal", -9, -OUTPUT_LARGE_WIDTH/2, OUTPUT_LARGE_WIDTH/2, true);
     gui.addSlider("rightCamCal", 768, OUTPUT_LARGE_WIDTH/2, OUTPUT_LARGE_WIDTH + OUTPUT_LARGE_WIDTH/2, true);
     gui.addSlider("frontScaleFactor", 1.6, 1, 2.5, false);
@@ -271,6 +272,7 @@ void testApp::update(){
         rightCamCal = gui.getValueI("rightCamCal");
         frontScaleFactor = gui.getValueF("frontScaleFactor");
         backScaleFactor = gui.getValueF("backScaleFactor");
+        roiHeightDec = gui.getValueI("roiHeightDec");
         leaderPosAdjusted = ofMap(OUTPUT_LARGE_WIDTH - leaderOverheadPosition.x, 0, OUTPUT_LARGE_WIDTH, leftCamCal, rightCamCal);
         leaderPosAdjusted -= OUTPUT_LARGE_WIDTH/2;
         // Account for camera scue
@@ -281,6 +283,9 @@ void testApp::update(){
             distScale = ofMap(leaderOverheadPosition.y, 0, OUTPUT_LARGE_HEIGHT/2, backScaleFactor, 1);
             //distScale = backScaleFactor;
         }
+        roiY = ofMap(leaderOverheadPosition.y, 0, OUTPUT_LARGE_HEIGHT, roiHeightDec, 0);
+        roiHeight = ofMap(leaderOverheadPosition.y, 0, OUTPUT_LARGE_HEIGHT, OUTPUT_LARGE_HEIGHT - 150, OUTPUT_LARGE_HEIGHT);
+        roiHeight -= roiY;
         leaderPosAdjusted *= distScale;
         roiSize *= distScale;
     }
@@ -303,7 +308,7 @@ void testApp::update(){
                     crowd.addVertex(people[i]->centroid.x*OUTPUT_LARGE_WIDTH, people[i]->centroid.y*OUTPUT_LARGE_HEIGHT);
                 }
                 crowd.close();
-                
+                // TODO: timer on crowd?
                 // TODO: improve clustering and selection of leader
                 // Get center and find nearest vertex
                 groupCenter = crowd.getCentroid2D();
@@ -370,17 +375,27 @@ void testApp::update(){
                 if (flipVideo) gray.mirror(true, false);
                 resize(gray, graySmall);
                 
-                // TODO: Set OpenCV ROI by information from overhead cam
+                ofRectangle cvBoundingBox(0, 0, graySmall.getWidth(), graySmall.getHeight());
+                roiRect.set(OUTPUT_LARGE_WIDTH/2 + leaderPosAdjusted - roiSize/2, roiY, roiSize, roiHeight);
+                roiScale = OUTPUT_LARGE_WIDTH/VIDEO_WIDTH/scaleFactor; // 720/1920/0.3 = 1.25
+                roiRect.getPositionRef() /= 1.25; // roiScale; Why do I need the actual number?
+                roiRect.scale(1 / 1.25);  // (1/roiScale); Why do I need the actual number?
+                roiRect = roiRect.getIntersection(cvBoundingBox);
+                
+                cv::Rect searchROI = toCv(roiRect);
                 Mat graySmallMat = toCv(graySmall);
-                equalizeHist(graySmallMat, graySmallMat);
+//                equalizeHist(graySmallMat, graySmallMat);
+                Mat croppedGraySmallMat(graySmallMat, searchROI);
+                equalizeHist(croppedGraySmallMat, croppedGraySmallMat);
                 graySmall.update(); // TODO: Needed ??
                 
-                classifier.detectMultiScale(graySmallMat, objects, 1.06, 1,
+                classifier.detectMultiScale(croppedGraySmallMat, objects, 1.06, 1,
                                             CASCADE_DO_CANNY_PRUNING |
-                                            //CASCADE_FIND_BIGGEST_OBJECT |
+                                            CASCADE_FIND_BIGGEST_OBJECT |
                                             //CASCADE_DO_ROUGH_SEARCH |
                                             0);
                 
+                ofRectangle camBoundingBox(0, 0, cam.getWidth(), cam.getHeight());
                 ofRectangle faceRect;
                 if(objects.empty()) {
                     // No Face. Start over;
@@ -389,6 +404,8 @@ void testApp::update(){
                 } else {
                     ofLog(OF_LOG_NOTICE, "  ---- Face Found ----");
                     faceRect = toOf(objects[0]);
+                    faceRect.x += roiRect.x;
+                    faceRect.y += roiRect.y;
                     faceRect.getPositionRef() /= scaleFactor;
                     faceRect.scale(1 / scaleFactor);
                     faceRect.scaleFromCenter(facePadding);
@@ -397,7 +414,8 @@ void testApp::update(){
                 
                 // Process Captured Face Image
                 
-                ofRectangle camBoundingBox(0, 0, cam.getWidth(), cam.getHeight());
+                // TODO: Minimum face size depending on distance?
+                
                 faceRect = faceRect.getIntersection(camBoundingBox);
                 float whDiff = fabsf(faceRect.width - faceRect.height);
                 if(faceRect.width < faceRect.height) {
@@ -407,8 +425,6 @@ void testApp::update(){
                     faceRect.width = faceRect.height;
                     faceRect.x += whDiff / 2;
                 }
-                
-                // TODO: Do this with full res image?
                 
                 cv::Rect roi = toCv(faceRect);
                 Mat grayMat = toCv(gray);
@@ -429,6 +445,7 @@ void testApp::update(){
                     croppedBackground.update();
                 }
                 
+                //equalizeHist(face, face);
                 face.update();
                 
                 // Save Face
@@ -635,8 +652,8 @@ void testApp::draw(){
     ofRect(OUTPUT_LARGE_WIDTH+PADDING,1,OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
     
     // DRAW ALL THE TIME
-    if (drawingState > 0 && drawingState < 3) {
-        tspsGrab.draw(0,0);
+    if (drawingState > 0) tspsGrab.draw(0,0);
+    if (drawingState < 3) {
         display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
         if (backgroundSubtraction) backgroundSub.draw((OUTPUT_LARGE_WIDTH+PADDING)*2, 0);
         face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
@@ -645,6 +662,7 @@ void testApp::draw(){
         thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
         croppedBackground.draw(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
         thinned.draw(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        //croppedGraySmallMat.draw(0,0);
         
         ofPushMatrix();
         
@@ -653,21 +671,23 @@ void testApp::draw(){
         ofTranslate(OUTPUT_LARGE_WIDTH+PADDING, 0);
         ofSetColor(0, 0, 255);
         // TODO: Make this the CV ROI
-        ofDrawBitmapString("x: " + ofToString(leaderOverheadPosition.x),2, 13);
-        ofDrawBitmapString("y: " + ofToString(OUTPUT_LARGE_HEIGHT - leaderOverheadPosition.y), 2, 23);
+        ofDrawBitmapString("KINECT POS", 2, 13);
+        ofDrawBitmapString("x: " + ofToString(leaderOverheadPosition.x),2, 23);
+        ofDrawBitmapString("y: " + ofToString(OUTPUT_LARGE_HEIGHT - leaderOverheadPosition.y), 2, 33);
         ofSetColor(0, 255, 0);
-        ofDrawBitmapString("x*: " + ofToString(leaderPosAdjusted), 2, 33);
-        ofRect(OUTPUT_LARGE_WIDTH/2 + leaderPosAdjusted - roiSize/2, 0, roiSize, OUTPUT_LARGE_HEIGHT);
+        ofDrawBitmapString("x*: " + ofToString(leaderPosAdjusted), 2, 43);
         
-        //ofScale((OUTPUT_LARGE_WIDTH / VIDEO_WIDTH) / CV_SCALE_FACTOR, (OUTPUT_LARGE_HEIGHT / VIDEO_HEIGTH) / CV_SCALE_FACTOR); //Doesn't work for some reason?
-        ofScale(0.375 / CV_SCALE_FACTOR, 0.375 / CV_SCALE_FACTOR);
-        ofSetColor(255, 0 ,0);
-        for(int i = 0; i < objects.size(); i++) {
-            ofRect(toOf(objects[i]));
-            ofDrawBitmapString(ofToString(i), objects[i].x + 2, objects[i].y + 13);
-            ofDrawBitmapString(ofToString(objects[i].width) + "x" + ofToString(objects[i].height), objects[i].x + 2, objects[i].y + 23);
+        if (objects.size() > 0) {
+            //A face? Draw the info
+            ofDrawBitmapString("Face = " + ofToString(objects[0].x) + "," + ofToString(objects[0].y), 2, OUTPUT_LARGE_HEIGHT - 3);
+            ofScale(0.375 / CV_SCALE_FACTOR, 0.375 / CV_SCALE_FACTOR);
+            ofRect(roiRect);
+            ofTranslate(roiRect.x, roiRect.y);
+            ofSetColor(255, 0 ,0);
+            ofRect(toOf(objects[0]));
+            ofDrawBitmapString(ofToString(objects[0].x) + "," + ofToString(objects[0].y), objects[0].x + 2, objects[0].y + 13);
+            ofDrawBitmapString(ofToString(objects[0].width) + "x" + ofToString(objects[0].height), objects[0].x + 2, objects[0].y + 23);
         }
-        
         ofPopMatrix();
         
         ofPushMatrix(); 

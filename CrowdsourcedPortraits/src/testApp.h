@@ -52,9 +52,10 @@ public:
 	vector<cv::Rect> objects;
 	float scaleFactor;
     bool backgroundSubtraction, flipVideo;
+    ofRectangle roiRect;
     
-    int currentState, drawingState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize, backgroundThresholdValue, backgroundLearningTime, roiSize, leftCamCal, rightCamCal;
-    float leaderPosAdjusted, frontScaleFactor, backScaleFactor, distScale;
+    int currentState, drawingState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize, backgroundThresholdValue, backgroundLearningTime, roiSize, roiHeight, roiY, leftCamCal, rightCamCal, roiHeightDec;
+    float leaderPosAdjusted, frontScaleFactor, backScaleFactor, distScale, roiScale;
     string currentStateTitle;
     vector<ofxTSPS::Person*> people;
     ofPoint leaderOverheadPosition, groupCenter;
