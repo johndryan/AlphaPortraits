@@ -14,7 +14,6 @@
 		169d3c72fde6c5590a1616f500a456b4 /* ofxCvFloatImage.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7b6a03390302d5a2c9f0e4ab630ae8d6 /* ofxCvFloatImage.cpp */; };
 		1BF89712170CAE7A00CF0F53 /* ETF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1BF8970C170CAE7A00CF0F53 /* ETF.cpp */; };
 		1BF89713170CAE7A00CF0F53 /* fdog.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1BF8970E170CAE7A00CF0F53 /* fdog.cpp */; };
-		1BF89783170D417D00CF0F53 /* ofxSimpleSerial.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1BF8977F170D417D00CF0F53 /* ofxSimpleSerial.cpp */; };
 		1BF89784170D417D00CF0F53 /* Instruction.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1BF89782170D417D00CF0F53 /* Instruction.cpp */; };
 		1d5f3298c2fa073628012944b1efde88 /* ofxCvContourFinder.cpp in Sources */ = {isa = PBXBuildFile; fileRef = c76de5c29bdbd2caa1dd0021a7376220 /* ofxCvContourFinder.cpp */; };
 		2023ef517ed2d8b397511d4bf2052690 /* Helpers.cpp in Sources */ = {isa = PBXBuildFile; fileRef = b9076967f8c54a04362c04aa9e3bb906 /* Helpers.cpp */; };
@@ -153,8 +152,6 @@
 		1BF8970F170CAE7A00CF0F53 /* fdog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fdog.h; sourceTree = "<group>"; };
 		1BF89710170CAE7A00CF0F53 /* imatrix.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = imatrix.h; sourceTree = "<group>"; };
 		1BF89711170CAE7A00CF0F53 /* myvec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = myvec.h; sourceTree = "<group>"; };
-		1BF8977F170D417D00CF0F53 /* ofxSimpleSerial.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ofxSimpleSerial.cpp; sourceTree = "<group>"; };
-		1BF89780170D417D00CF0F53 /* ofxSimpleSerial.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ofxSimpleSerial.h; sourceTree = "<group>"; };
 		1BF89781170D417D00CF0F53 /* Instruction.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Instruction.h; sourceTree = "<group>"; };
 		1BF89782170D417D00CF0F53 /* Instruction.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Instruction.cpp; sourceTree = "<group>"; };
 		1d8b9a8480a5b3d82cefff066dafba2e /* simpleFileLister.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.c.h; fileEncoding = 30; name = simpleFileLister.h; path = ../../../addons/ofxControlPanel/src/simpleFileLister.h; sourceTree = SOURCE_ROOT; };
@@ -855,8 +852,6 @@
 		E4B69E1C0A3A1BDC003C02F2 /* src */ = {
 			isa = PBXGroup;
 			children = (
-				1BF8977F170D417D00CF0F53 /* ofxSimpleSerial.cpp */,
-				1BF89780170D417D00CF0F53 /* ofxSimpleSerial.h */,
 				1BF89781170D417D00CF0F53 /* Instruction.h */,
 				1BF89782170D417D00CF0F53 /* Instruction.cpp */,
 				1BF8970B170CAE7A00CF0F53 /* CLD */,
@@ -1262,7 +1257,6 @@
 				34f3d1f43536a7cbfcb88a38cbd687e5 /* ofxTSPSScene.cpp in Sources */,
 				1BF89712170CAE7A00CF0F53 /* ETF.cpp in Sources */,
 				1BF89713170CAE7A00CF0F53 /* fdog.cpp in Sources */,
-				1BF89783170D417D00CF0F53 /* ofxSimpleSerial.cpp in Sources */,
 				1BF89784170D417D00CF0F53 /* Instruction.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1339,8 +1333,6 @@
 					../../../addons/ofxCv/libs/ofxCv/include/ofxCv,
 					../../../addons/ofxCv/libs/ofxCv/src,
 					../../../addons/ofxCv/src,
-					../../../addons/ofxSimpleSerial/libs,
-					../../../addons/ofxSimpleSerial/src,
 					../../../addons/ofxTSPSReceiver/libs,
 					../../../addons/ofxTSPSReceiver/src,
 				);
@@ -1419,8 +1411,6 @@
 					../../../addons/ofxCv/libs/ofxCv/include/ofxCv,
 					../../../addons/ofxCv/libs/ofxCv/src,
 					../../../addons/ofxCv/src,
-					../../../addons/ofxSimpleSerial/libs,
-					../../../addons/ofxSimpleSerial/src,
 					../../../addons/ofxTSPSReceiver/libs,
 					../../../addons/ofxTSPSReceiver/src,
 				);
@@ -1493,8 +1483,6 @@
 					../../../addons/ofxCv/libs/ofxCv/include/ofxCv,
 					../../../addons/ofxCv/libs/ofxCv/src,
 					../../../addons/ofxCv/src,
-					../../../addons/ofxSimpleSerial/libs,
-					../../../addons/ofxSimpleSerial/src,
 					../../../addons/ofxTSPSReceiver/libs,
 					../../../addons/ofxTSPSReceiver/src,
 				);
@@ -1625,8 +1613,6 @@
 					../../../addons/ofxCv/libs/ofxCv/include/ofxCv,
 					../../../addons/ofxCv/libs/ofxCv/src,
 					../../../addons/ofxCv/src,
-					../../../addons/ofxSimpleSerial/libs,
-					../../../addons/ofxSimpleSerial/src,
 					../../../addons/ofxTSPSReceiver/libs,
 					../../../addons/ofxTSPSReceiver/src,
 				);

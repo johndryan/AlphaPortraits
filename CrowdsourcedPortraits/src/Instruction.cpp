@@ -36,6 +36,9 @@ string Instruction::toString(){
         case 3:
             commandChar = "l";
             break;
+        case 4:
+            commandChar = "v";
+            break;
     }
     
     commandChar = commandChar + " " + ofToString(x) + " " + ofToString(y) + "\n";

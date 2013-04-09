@@ -11,7 +11,7 @@
 #include "fdog.h"
 #include "myvec.h"
 
-//#include "ofxSimpleSerial.h"
+#include "ofxSimpleSerial.h"
 #include "Instruction.h"
 
 class testApp : public ofBaseApp{
@@ -60,13 +60,13 @@ public:
     vector<ofxTSPS::Person*> people;
     ofPoint leaderOverheadPosition, groupCenter;
     ofPolyline crowd;
-    string states[6] = { "WATCHING CROWD", "CREATING PORTRAIT", "CONFIRM PORTRAIT", "SCROLLPAPER", "DRAWING PORTRAIT", "DRAWING COMPLETE" };
+    string states[6] = { "WATCHING CROWD", "CREATING PORTRAIT", "CONFIRM PORTRAIT", "DRAWING PORTRAIT", "DRAWING COMPLETE" };
     
     vector<ofPolyline> shading, paths;
     vector<ofPoint> linePoints;
     ofTessellator tess;
     
-    //ofxSimpleSerial	serial;
+    ofxSimpleSerial	serial;
     int nInstructions, currentInstruction, plotMinX, plotMaxX, plotMinY, plotMaxY, plotScaleFactor;
     bool currentlyPlotting, plotterReady, firstLastDraw, shadingOn, drawingOn, confirmFirst;
     string      message, serialID;

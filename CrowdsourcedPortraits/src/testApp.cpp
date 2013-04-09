@@ -1,9 +1,8 @@
 #define WATCHING_CROWD 0
 #define CREATING_PORTRAIT 1
 #define CONFIRM_PORTRAIT 2
-#define SCROLLPAPER 3
-#define DRAWING_PORTRAIT 4
-#define DRAWING_COMPLETE 5
+#define DRAWING_PORTRAIT 3
+#define DRAWING_COMPLETE 4
 
 #define PADDING 10
 #define OUTPUT_LARGE_WIDTH 720
@@ -21,6 +20,7 @@
 #define MOVE_REL 1
 #define LINE_ABS 2
 #define LINE_REL 3
+#define SCROLL_PAPER 4
 
 #include "testApp.h"
 
@@ -108,12 +108,12 @@ void testApp::setup(){
 	ofSetFrameRate(120);
 	ofEnableSmoothing();
     
-    plotMinX = 1500;
-    plotMaxX = 11350;
-    plotMinY = 2500;
-    plotMaxY = 11350;
+    plotMinX = 5300;
+    plotMaxX = 13940;
+    plotMinY = 3000;
+    plotMaxY = 13500;
     plotScaleFactor = 10;
-    currentlyPlotting = false;
+    //currentlyPlotting = false;
     plotterReady = false;
     firstLastDraw = false;
     currentInstruction = 0;
@@ -132,19 +132,19 @@ void testApp::setup(){
     people = tspsReceiver.getPeople();
     currentCrowdSize = people.size();
     
-//    serial.listDevices();
-//	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
-//    string deviceLine, serialID;
-//    for(int i=0; i<deviceList.size();i++){
-//        deviceLine = deviceList[i].getDeviceName().c_str();
-//        if(deviceLine.substr(0,12) == "tty.usbmodem"){
-//            serialID = "/dev/" +deviceLine;
-//            cout<<"arduino serial = "<<serialID<<endl;
-//        }
-//    }
-//	serial.setup(serialID,57600);
-//	serial.startContinuesRead(false);
-//	ofAddListener(serial.NEW_MESSAGE,this,&testApp::onNewMessage);
+    serial.listDevices();
+	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
+    string deviceLine, serialID;
+    for(int i=0; i<deviceList.size();i++){
+        deviceLine = deviceList[i].getDeviceName().c_str();
+        if(deviceLine.substr(0,12) == "tty.usbmodem"){
+            serialID = "/dev/" +deviceLine;
+            cout<<"arduino serial = "<<serialID<<endl;
+        }
+    }
+	serial.setup(serialID,57600);
+	serial.startContinuesRead(false);
+	ofAddListener(serial.NEW_MESSAGE,this,&testApp::onNewMessage);
     
     // CAMERA & CV
     scaleFactor = CV_SCALE_FACTOR;
@@ -197,7 +197,7 @@ void testApp::setup(){
 
 	gui.addPanel("Face Detect Settings");
     gui.addSlider("sliceWidth", sliceWidth, 100, 400, true);
-	gui.addSlider("black", 42, -255, 255, true);
+	gui.addSlider("black", 34, -255, 255, true);
 	gui.addSlider("sigma1", 0.99, 0.01, 2.0, false);
 	gui.addSlider("sigma2", 4.45, 0.01, 10.0, false);
 	gui.addSlider("tau", 0.97, 0.8, 1.0, false);
@@ -205,7 +205,7 @@ void testApp::setup(){
 	gui.addSlider("smoothPasses", 4, 1, 4, true);
 	gui.addSlider("thresh", 121.8, 0, 255, false);
 	gui.addSlider("minGapLength", 5.5, 2, 12, false);
-	gui.addSlider("minPathLength", 40, 0, 50, true);
+	gui.addSlider("minPathLength", 10, 0, 50, true);
 	gui.addSlider("facePadding", 1.4, 0, 2, false);
     gui.addSlider("verticalOffset", int(-croppedFaceSize/24), int(-croppedFaceSize/2), int(croppedFaceSize/2), false);
 	gui.loadSettings("facesettings.xml");
@@ -232,11 +232,11 @@ void testApp::setup(){
     gui.addPanel("Drawing");
     gui.addToggle("drawingOn", true);
     gui.addToggle("confirmFirst", true);
-    gui.addSlider("SCALE", 10, 1, 20, true);
-    gui.addSlider("home_x", 6425, plotMinX, plotMaxX, true);
-    gui.addSlider("home_y", 6425, plotMinY, plotMaxY, true);
-    gui.addSlider("startX", 6000, plotMinX, plotMaxX, true);
-    gui.addSlider("startY", 6000, plotMinY, plotMaxY, true);
+    gui.addSlider("SCALE", plotScaleFactor, 1, 20, true);
+    gui.addSlider("home_x", 9620, plotMinX, plotMaxX, true);
+    gui.addSlider("home_y", 9620, plotMinY, plotMaxY, true);
+    gui.addSlider("startX", 6500, plotMinX, plotMaxX, true);
+    gui.addSlider("startY", 3500, plotMinY, plotMaxY, true);
     gui.addToggle("firstLastDraw", false);
     gui.loadSettings("calibration.xml");
     
@@ -257,7 +257,7 @@ void testApp::update(){
     currentStateTitle = states[currentState];
     
     backgroundSubtraction = gui.getValueB("backgroundSubtraction");
-    if (backgroundSubtraction && currentState < SCROLLPAPER) {
+    if (backgroundSubtraction && currentState < DRAWING_PORTRAIT) {
         cam.update();
         if(cam.isFrameNew()) {
             copy(cam, display);
@@ -269,7 +269,7 @@ void testApp::update(){
     }
     
     // Position Calibration
-    if (currentState > WATCHING_CROWD && currentState < SCROLLPAPER) {
+    if (currentState > WATCHING_CROWD && currentState < DRAWING_PORTRAIT) {
         roiSize = gui.getValueI("roiSize");
         leftCamCal = gui.getValueI("leftCamCal");
         rightCamCal = gui.getValueI("rightCamCal");
@@ -609,42 +609,29 @@ void testApp::update(){
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
             
-        case SCROLLPAPER:
-        {
-            
-            if (plotterReady) {
-                
-            }
-            // Scroll the paper into place
-            // Delay until complete
-            // currentState++;
-            // ofLog(OF_LOG_NOTICE, "== STATE: DRAWING PORTRAIT ==");
-        }
-        break;
-            
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - -
-            
         case DRAWING_PORTRAIT:
         {
-            
-//            if (instructions.size() > 0 && plotterReady){
-//                cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
-//                message = instructions[currentInstruction].toString();
-//                currentInstruction += 1;
-//                
-//                if (currentInstruction >= instructions.size()) {
-//                    currentState++;
-//                    ofLog(OF_LOG_NOTICE, "== STATE: DRAWING COMPLETE ==");
-//                }
-//                
-//                if(message != ""){
-//                    cout << "==== SENDING serial: " << message << "\n";
-//                    plotterReady = false;
-//                    serial.writeString(message);
-//                    message = "";
-//                }
-//                
-//            } else {
+            //ofLog(OF_LOG_NOTICE) << "Num Instructions = " << instructions.size();
+            if (instructions.size() > 0 && plotterReady){
+                cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
+                message = instructions[currentInstruction].toString();
+                currentInstruction += 1;
+                
+                if (currentInstruction >= instructions.size()) {
+                    currentState++;
+                    ofLog(OF_LOG_NOTICE, "== STATE: DRAWING COMPLETE ==");
+                }
+                
+                if(message != ""){
+                    cout << "==== SENDING serial: " << message << "\n";
+                    plotterReady = false;
+                    serial.writeString(message);
+                    message = "";
+                }
+                
+            }
+
+//            else {
 //                ofLog(OF_LOG_NOTICE, "---- Instructions empty OR plotter not ready. Starting over");
 //                currentState++;
 //                ofLog(OF_LOG_NOTICE, "== STATE: WATCHING CROWD ==");
@@ -755,20 +742,19 @@ void testApp::draw(){
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
             
-        case SCROLLPAPER:
+        case DRAWING_PORTRAIT:
         {
+            if (plotterReady) {
+                ofSetColor(0, 255, 0);
+            } else {
+                ofSetColor(255, 0, 0);
+            }
+            ofCircle(20, 20, 2);
+            
             ofPushMatrix();
             ofTranslate(CROPPED_FACE_SIZE*1.5 + PADDING*3, OUTPUT_LARGE_HEIGHT+PADDING);
             drawPaths();
             ofPopMatrix();
-        }
-        break;
-            
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - -
-            
-        case DRAWING_PORTRAIT:
-        {
-            //
         }
         break;
             
@@ -800,18 +786,16 @@ void testApp::keyPressed(int key){
             currentState = CONFIRM_PORTRAIT;
             break;
         case '4':
-            currentState = SCROLLPAPER;
-            break;
-        case '5':
             currentState = DRAWING_PORTRAIT;
             break;
-        case '6':
+        case '5':
             currentState = DRAWING_COMPLETE;
             break;
         case 'b':
             background.reset();
             break;
     }
+    ofLog(OF_LOG_NOTICE) << "== STATE CHANGE  : " << states[currentState] << " ==";
 }
 
 //--------------------------------------------------------------
@@ -907,11 +891,41 @@ void testApp::pathsToInstructions() {
     float home_x = gui.getValueF("home_x");
     float home_y = gui.getValueF("home_y");
     firstLastDraw = gui.getValueB("firstLastDraw");
+    plotScaleFactor = gui.getValueI("SCALE");
     
     if (instructions.size()>0) instructions.erase(instructions.begin());
-    //cout << "--PATHS TO INSTRUCTIONS\n";
-    // MOVE TO START:
-    ofVec2f startPoint = paths[0].getVertices()[0];
+    
+    // SCROLL PAPER
+    cout << "--PATHS TO INSTRUCTIONS\n";
+    instructions.push_back(Instruction(SCROLL_PAPER, 0, 0));
+    
+    //DRAW SHADING
+    cout << "--SHADING TO INSTRUCTIONS\n";
+    ofVec2f startPoint = shading[0].getVertices()[0];
+    instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY));
+	for(int i = 0; i < shading.size(); i++) {
+		//DRAW
+        for(int j = 1; j < shading[i].getVertices().size(); j++) {
+            ofVec2f endPoint = shading[i].getVertices()[j];
+            instructions.push_back(Instruction(LINE_ABS, endPoint.x*plotScaleFactor + startX, endPoint.y*plotScaleFactor + startY ));
+            //            cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
+        }
+        // MOVE
+        if (firstLastDraw && i == 0 && shading.size() > 2) {
+            //            cout << "---- SKIP TO LAST VECTOR SET \n";
+            // MOVE STRAIGHT TO LAST DRAW SET
+            i = paths.size()-2;
+        }
+		if(i + 1 < shading.size()) {
+			ofVec2f startPoint = shading[i + 1].getVertices()[0];
+            instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY ));
+            //            cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
+		}
+	}
+    
+    //DRAW LINES
+    cout << "--DRAWING TO INSTRUCTIONS\n";
+    startPoint = paths[0].getVertices()[0];
     instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY));
     //cout << "---- MOVE FOR #1 TO: [ " << startPoint << "]\n";
 	for(int i = 0; i < paths.size(); i++) {
@@ -936,7 +950,7 @@ void testApp::pathsToInstructions() {
     cout << "--COMPLETE: " << instructions.size() << " INSTRUCTIONS CREATED\n" << "--NOW PRINT";
     if (instructions.size() > 0) {
         instructions.push_back(Instruction(MOVE_ABS, home_x, home_y ));
-        currentlyPlotting = true;
+        //currentlyPlotting = true;
     }
 }
 
