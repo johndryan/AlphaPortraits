@@ -54,7 +54,7 @@ public:
     bool backgroundSubtraction, flipVideo;
     ofRectangle roiRect;
     
-    int currentState, drawingState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize, backgroundThresholdValue, backgroundLearningTime, roiSize, roiHeight, roiY, leftCamCal, rightCamCal, roiHeightDec;
+    int currentState, drawingState, minCrowdSize, currentCrowdSize, sliceWidth, croppedFaceSize, backgroundThresholdValue, backgroundLearningTime, roiSize, roiHeight, roiY, leftCamCal, rightCamCal, roiHeightDec, minBlobNumber, minBlobArea;
     float leaderPosAdjusted, frontScaleFactor, backScaleFactor, distScale, roiScale;
     string currentStateTitle;
     vector<ofxTSPS::Person*> people;
@@ -68,7 +68,7 @@ public:
     
     //ofxSimpleSerial	serial;
     int nInstructions, currentInstruction, plotMinX, plotMaxX, plotMinY, plotMaxY, plotScaleFactor;
-    bool currentlyPlotting, plotterReady, firstLastDraw, shadingOn, drawingOn;
+    bool currentlyPlotting, plotterReady, firstLastDraw, shadingOn, drawingOn, confirmFirst;
     string      message, serialID;
     void		onNewMessage(string & message);
     vector<Instruction> instructions;

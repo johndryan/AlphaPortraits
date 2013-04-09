@@ -218,17 +218,20 @@ void testApp::setup(){
     gui.loadSettings("contoursettings.xml");
     
     gui.addPanel("Shading Settings");
-    gui.addToggle("shadingOn", false);
-	gui.addSlider("shadingThresh", 5, 0, 255, false);
+    gui.addToggle("shadingOn", true);
+	gui.addSlider("shadingThresh", 40, 0, 255, false);
     gui.addSlider("contourThreshold", 0, 0, 255, true);
     gui.addSlider("contourMinAreaRadius", CONTOUR_MIN_AREA, 1, 50, true);
     gui.addSlider("contourMaxAreaRadius", croppedFaceSize*3/4, croppedFaceSize/2, croppedFaceSize, true);
+    gui.addSlider("minBlobNumber", 2, 1, 10, true);
+    gui.addSlider("minBlobArea", 10000, 5000, 20000, true);
     gui.addToggle("contourFindHoles", true);
     gui.addToggle("contourSimplify", true);
 	gui.loadSettings("contoursettings.xml");
     
     gui.addPanel("Drawing");
-    gui.addToggle("drawingOn", false);
+    gui.addToggle("drawingOn", true);
+    gui.addToggle("confirmFirst", true);
     gui.addSlider("SCALE", 10, 1, 20, true);
     gui.addSlider("home_x", 6425, plotMinX, plotMaxX, true);
     gui.addSlider("home_y", 6425, plotMinY, plotMaxY, true);
@@ -357,6 +360,8 @@ void testApp::update(){
                 background.setLearningTime(gui.getValueI("backgroundLearningTime"));
                 background.setThresholdValue(gui.getValueI("backgroundThresholdValue"));
                 
+                minBlobNumber = gui.getValueI("minBlobNumber");
+                minBlobArea = gui.getValueI("minBlobArea");
                 shadingOn = gui.getValueB("shadingOn");
                 drawingOn = gui.getValueB("drawingOn");
                 
@@ -364,6 +369,7 @@ void testApp::update(){
                 contourFinder.setMaxAreaRadius(gui.getValueI("contourMaxAreaRadius"));
                 contourFinder.setFindHoles(gui.getValueB("contourFindHoles"));
                 contourFinder.setSimplify(gui.getValueB("contourSimplify"));
+                
                 
                 if (!backgroundSubtraction) {
                     copy(cam, display);
@@ -378,13 +384,12 @@ void testApp::update(){
                 ofRectangle cvBoundingBox(0, 0, graySmall.getWidth(), graySmall.getHeight());
                 roiRect.set(OUTPUT_LARGE_WIDTH/2 + leaderPosAdjusted - roiSize/2, roiY, roiSize, roiHeight);
                 roiScale = OUTPUT_LARGE_WIDTH/VIDEO_WIDTH/scaleFactor; // 720/1920/0.3 = 1.25
-                roiRect.getPositionRef() /= 1.25; // roiScale; Why do I need the actual number?
+                roiRect.getPositionRef() /= 1.25; // roiScale; TODO: Why do I need the actual number? C++ int / float stuff - sort it out
                 roiRect.scale(1 / 1.25);  // (1/roiScale); Why do I need the actual number?
                 roiRect = roiRect.getIntersection(cvBoundingBox);
                 
                 cv::Rect searchROI = toCv(roiRect);
                 Mat graySmallMat = toCv(graySmall);
-//                equalizeHist(graySmallMat, graySmallMat);
                 Mat croppedGraySmallMat(graySmallMat, searchROI);
                 equalizeHist(croppedGraySmallMat, croppedGraySmallMat);
                 graySmall.update(); // TODO: Needed ??
@@ -520,6 +525,23 @@ void testApp::update(){
                 contourFinder.findContours(faceThresholded);
                 int n = contourFinder.size();
                 
+                // Is there a decent face drawing here? How much shading is there?
+                
+                float totalArea;
+                for(int i = 0; i < n; i++) {
+                    ofPolyline blob = contourFinder.getPolyline(i).getSmoothed(n/10);
+                    totalArea += ABS(blob.getArea());
+                }
+                
+                ofLog(OF_LOG_NOTICE) << "totalArea = " << totalArea;
+                
+                if (n < minBlobNumber || totalArea < minBlobArea) {
+                    currentState = 10;
+                    break;
+                }
+                
+                // TODO: look for min percentage black to white? Or num of paths? If not, start over
+                
                 if (shadingOn) {
                      // Create Shading
                     shading.clear();
@@ -557,8 +579,6 @@ void testApp::update(){
                     }
                 }
                 
-                // TODO: look for min percentage black to white? Or num of paths? If not, start over
-                
                 if (drawingOn) {
                     //Get Paths
                     paths = getPaths(thinned, minGapLength, minPathLength);
@@ -577,6 +597,11 @@ void testApp::update(){
             
         case CONFIRM_PORTRAIT:
         {
+            confirmFirst = gui.getValueB("confirmFirst");
+            if (!confirmFirst) {
+                currentState++;
+                ofLog(OF_LOG_NOTICE, "== STATE: SCROLLING PAPER ==");
+            }
             // Check the portrait
             // currentState++;
             //ofLog(OF_LOG_NOTICE, "== STATE: SCROLLING PAPER ==");
@@ -724,17 +749,7 @@ void testApp::draw(){
             
         case CREATING_PORTRAIT:
         {
-//            //cam.draw(0,0);
-//            ofNoFill();
-//            
-//            //ofPushMatrix();
-//            //ofScale(1 / scaleFactor, 1 / scaleFactor);
-//            //ofTranslate()
-//            for(int i = 0; i < objects.size(); i++) {
-//                ofRect(toOf(objects[i]));
-//            }
-//            //ofPopMatrix()
-//            ofDrawBitmapString(ofToString(objects.size()), 10, 20);
+
         }
         break;
             
@@ -742,7 +757,10 @@ void testApp::draw(){
             
         case SCROLLPAPER:
         {
-            //
+            ofPushMatrix();
+            ofTranslate(CROPPED_FACE_SIZE*1.5 + PADDING*3, OUTPUT_LARGE_HEIGHT+PADDING);
+            drawPaths();
+            ofPopMatrix();
         }
         break;
             
@@ -868,13 +886,13 @@ void testApp::drawPaths() {
         }
     }
     if (drawingOn) {
-        ofSetColor(yellowPrint);
         for(int i = 0; i < paths.size(); i++) {
+            ofSetColor(yellowPrint, 200);
             paths[i].draw();
             if(i + 1 < paths.size()) {
                 ofVec2f endPoint = paths[i].getVertices()[paths[i].size() - 1];
                 ofVec2f startPoint = paths[i + 1].getVertices()[0];
-                ofSetColor(magentaPrint, 128);
+                ofSetColor(55,55,55);
                 ofLine(endPoint, startPoint);
             }
         }
@@ -891,31 +909,31 @@ void testApp::pathsToInstructions() {
     firstLastDraw = gui.getValueB("firstLastDraw");
     
     if (instructions.size()>0) instructions.erase(instructions.begin());
-    cout << "--PATHS TO INSTRUCTIONS\n";
+    //cout << "--PATHS TO INSTRUCTIONS\n";
     // MOVE TO START:
     ofVec2f startPoint = paths[0].getVertices()[0];
     instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY));
-    cout << "---- MOVE FOR #1 TO: [ " << startPoint << "]\n";
+    //cout << "---- MOVE FOR #1 TO: [ " << startPoint << "]\n";
 	for(int i = 0; i < paths.size(); i++) {
 		//DRAW
         for(int j = 1; j < paths[i].getVertices().size(); j++) {
             ofVec2f endPoint = paths[i].getVertices()[j];
             instructions.push_back(Instruction(LINE_ABS, endPoint.x*plotScaleFactor + startX, endPoint.y*plotScaleFactor + startY ));
-            cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
+//            cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
         }
         // MOVE
         if (firstLastDraw && i == 0 && paths.size() > 2) {
-            cout << "---- SKIP TO LAST VECTOR SET \n";
+//            cout << "---- SKIP TO LAST VECTOR SET \n";
             // MOVE STRAIGHT TO LAST DRAW SET
             i = paths.size()-2;
         }
 		if(i + 1 < paths.size()) {
 			ofVec2f startPoint = paths[i + 1].getVertices()[0];
             instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY ));
-            cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
+//            cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
 		}
 	}
-    cout << "--COMPLETE: x INSTRUCTIONS CREATED\n" << "--NOW PRINT";
+    cout << "--COMPLETE: " << instructions.size() << " INSTRUCTIONS CREATED\n" << "--NOW PRINT";
     if (instructions.size() > 0) {
         instructions.push_back(Instruction(MOVE_ABS, home_x, home_y ));
         currentlyPlotting = true;
