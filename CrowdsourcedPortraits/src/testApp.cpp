@@ -6,8 +6,8 @@
 #define DRAWING_COMPLETE 5
 
 #define PADDING 10
-#define OUTPUT_LARGE_WIDTH 492
-#define OUTPUT_LARGE_HEIGHT 364
+#define OUTPUT_LARGE_WIDTH 720
+#define OUTPUT_LARGE_HEIGHT 405
 
 #define VIDEO_WIDTH 1920
 #define VIDEO_HEIGTH 1080
@@ -16,6 +16,11 @@
 #define CROPPED_FACE_SIZE 512
 #define CONTOUR_MIN_AREA 3
 #define SHADING_RES 10
+
+#define MOVE_ABS 0
+#define MOVE_REL 1
+#define LINE_ABS 2
+#define LINE_REL 3
 
 #include "testApp.h"
 
@@ -40,6 +45,58 @@ void removeIslands(ofPixels& img) {
 }
 
 //--------------------------------------------------------------
+typedef std::pair<int, int> intPair;
+vector<ofPolyline> getPaths(ofPixels& img, float minGapLength = 2, int minPathLength = 0) {
+	float minGapSquared = minGapLength * minGapLength;
+	
+	list<intPair> remaining;
+	int w = img.getWidth(), h = img.getHeight();
+	for(int y = 0; y < h; y++) {
+		for(int x = 0; x < w; x++) {
+			if(img.getColor(x, y).getBrightness() > 128) {
+				remaining.push_back(intPair(x, y));
+			}
+		}
+	}
+	
+	vector<ofPolyline> paths;
+	if(!remaining.empty()) {
+		int x = remaining.back().first, y = remaining.back().second;
+		while(!remaining.empty()) {
+			int nearDistance = 0;
+			list<intPair>::iterator nearIt, it;
+			for(it = remaining.begin(); it != remaining.end(); it++) {
+				intPair& cur = *it;
+				int xd = x - cur.first, yd = y - cur.second;
+				int distance = xd * xd + yd * yd;
+				if(it == remaining.begin() || distance < nearDistance) {
+					nearIt = it, nearDistance = distance;
+					// break for immediate neighbors
+					if(nearDistance < 4) {
+						break;
+					}
+				}
+			}
+			intPair& next = *nearIt;
+			x = next.first, y = next.second;
+			if(paths.empty()) {
+				paths.push_back(ofPolyline());
+			} else if(nearDistance >= minGapSquared) {
+				if(paths.back().size() < minPathLength) {
+					paths.back().clear();
+				} else {
+					paths.push_back(ofPolyline());
+				}
+			}
+			paths.back().addVertex(ofVec2f(x, y));
+			remaining.erase(nearIt);
+		}
+	}
+	
+	return paths;
+}
+
+//--------------------------------------------------------------
 
 bool sortByX( ofPoint a, ofPoint b){
     return a.x < b.x;
@@ -47,10 +104,24 @@ bool sortByX( ofPoint a, ofPoint b){
 
 //--------------------------------------------------------------
 void testApp::setup(){
+    ofSetVerticalSync(true);
+	ofSetFrameRate(120);
+	ofEnableSmoothing();
+    
+    plotMinX = 1500;
+    plotMaxX = 11350;
+    plotMinY = 2500;
+    plotMaxY = 11350;
+    plotScaleFactor = 10;
+    currentlyPlotting = false;
+    plotterReady = false;
+    firstLastDraw = false;
+    currentInstruction = 0;
+    
     // VARIABLES
     currentState = WATCHING_CROWD;
     currentStateTitle = states[currentState];
-    minCrowdSize = 3;
+    minCrowdSize = 4;
     sliceWidth = 200;
     backgroundLearningTime = 900;
     backgroundThresholdValue = 10;
@@ -61,18 +132,33 @@ void testApp::setup(){
     people = tspsReceiver.getPeople();
     currentCrowdSize = people.size();
     
+//    serial.listDevices();
+//	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
+//    string deviceLine, serialID;
+//    for(int i=0; i<deviceList.size();i++){
+//        deviceLine = deviceList[i].getDeviceName().c_str();
+//        if(deviceLine.substr(0,12) == "tty.usbmodem"){
+//            serialID = "/dev/" +deviceLine;
+//            cout<<"arduino serial = "<<serialID<<endl;
+//        }
+//    }
+//	serial.setup(serialID,57600);
+//	serial.startContinuesRead(false);
+//	ofAddListener(serial.NEW_MESSAGE,this,&testApp::onNewMessage);
+    
     // CAMERA & CV
     scaleFactor = CV_SCALE_FACTOR;
 	croppedFaceSize = CROPPED_FACE_SIZE;
     // TODO: Make face non-square?
     
-    //ofSetVerticalSync(true);
+    //cam.setDeviceID(0);
 	cam.initGrabber(VIDEO_WIDTH, VIDEO_HEIGTH);
 	background.setLearningTime(backgroundLearningTime);
 	background.setThresholdValue(backgroundThresholdValue);
     classifier.load(ofToDataPath("haarcascade_frontalface_alt2.xml"));
     display.allocate(VIDEO_WIDTH, VIDEO_HEIGTH, OF_IMAGE_COLOR);
     backgroundSub.allocate(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT, OF_IMAGE_COLOR);
+    imitate(backgroundSub, tspsGrab);
     graySmall.allocate(cam.getWidth() * scaleFactor, cam.getHeight() * scaleFactor, OF_IMAGE_GRAYSCALE);
 	face.allocate(croppedFaceSize, croppedFaceSize, OF_IMAGE_GRAYSCALE);
 	img.init(croppedFaceSize, croppedFaceSize);
@@ -100,7 +186,12 @@ void testApp::setup(){
 	vars.push_back( guiVariablePointer("Num People", &currentCrowdSize, GUI_VAR_INT) );
 	vars.push_back( guiVariablePointer("State", &currentStateTitle, GUI_VAR_STRING) );
     gui.addVariableLister("Crowd Variables", vars);
-    gui.addSlider("minCrowdSize", minCrowdSize, 3, 10, true);
+    gui.addSlider("minCrowdSize", minCrowdSize, 2, 10, true);
+    gui.addSlider("roiSize", 75, 25, 400, true);
+    gui.addSlider("leftCamCal", -9, -OUTPUT_LARGE_WIDTH/2, OUTPUT_LARGE_WIDTH/2, true);
+    gui.addSlider("rightCamCal", 768, OUTPUT_LARGE_WIDTH/2, OUTPUT_LARGE_WIDTH + OUTPUT_LARGE_WIDTH/2, true);
+    gui.addSlider("frontScaleFactor", 1.6, 1, 2.5, false);
+    gui.addSlider("backScaleFactor", 0.75, 0.5, 1, false);
 	gui.loadSettings("crowdsettings.xml");
 
 	gui.addPanel("Face Detect Settings");
@@ -112,19 +203,21 @@ void testApp::setup(){
 	gui.addSlider("halfw", 4, 1, 8, true);
 	gui.addSlider("smoothPasses", 4, 1, 4, true);
 	gui.addSlider("thresh", 121.8, 0, 255, false);
-	//gui.addSlider("minGapLength", 5.5, 2, 12, false);
-	//gui.addSlider("minPathLength", 40, 0, 50, true);
+	gui.addSlider("minGapLength", 5.5, 2, 12, false);
+	gui.addSlider("minPathLength", 40, 0, 50, true);
 	gui.addSlider("facePadding", 1.4, 0, 2, false);
     gui.addSlider("verticalOffset", int(-croppedFaceSize/24), int(-croppedFaceSize/2), int(croppedFaceSize/2), false);
 	gui.loadSettings("facesettings.xml");
     
-    gui.addPanel("Background Subtraction");
+    gui.addPanel("Camera Settings");
+    gui.addToggle("flipVideo", true);
     gui.addToggle("backgroundSubtraction", false);
     gui.addSlider("backgroundThresholdValue", backgroundThresholdValue, 0, 255, true);
     gui.addSlider("backgroundLearningTime", backgroundLearningTime, 100, 1500, true);
     gui.loadSettings("contoursettings.xml");
     
     gui.addPanel("Shading Settings");
+    gui.addToggle("shadingOn", false);
 	gui.addSlider("shadingThresh", 5, 0, 255, false);
     gui.addSlider("contourThreshold", 0, 0, 255, true);
     gui.addSlider("contourMinAreaRadius", CONTOUR_MIN_AREA, 1, 50, true);
@@ -133,26 +226,63 @@ void testApp::setup(){
     gui.addToggle("contourSimplify", true);
 	gui.loadSettings("contoursettings.xml");
     
+    gui.addPanel("Drawing");
+    gui.addToggle("drawingOn", false);
+    gui.addSlider("SCALE", 10, 1, 20, true);
+    gui.addSlider("home_x", 6425, plotMinX, plotMaxX, true);
+    gui.addSlider("home_y", 6425, plotMinY, plotMaxY, true);
+    gui.addSlider("startX", 6000, plotMinX, plotMaxX, true);
+    gui.addSlider("startY", 6000, plotMinY, plotMaxY, true);
+    gui.addToggle("firstLastDraw", false);
+    gui.loadSettings("calibration.xml");
+    
     // DISPLAY
     ofBackground(0);
+    ofTrueTypeFont::setGlobalDpi(72);
+    font.loadFont("verdana.ttf", 15, true, true);
 }
 
 //--------------------------------------------------------------
 void testApp::update(){
+    drawingState = currentState;
+    
     // Get control panel values ( TODO: everytime? )
     minCrowdSize = gui.getValueI("minCrowdSize");
+    flipVideo = gui.getValueI("flipVideo");
     currentCrowdSize = people.size();
     currentStateTitle = states[currentState];
+    
     backgroundSubtraction = gui.getValueB("backgroundSubtraction");
-	background.setLearningTime(gui.getValueI("backgroundLearningTime"));
-	background.setThresholdValue(gui.getValueI("backgroundThresholdValue"));
-    if (backgroundSubtraction) {
+    if (backgroundSubtraction && currentState < SCROLLPAPER) {
         cam.update();
-        copy(cam, display);
-        display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
-        
-        background.update(display, backgroundSub);
-        backgroundSub.update();
+        if(cam.isFrameNew()) {
+            copy(cam, display);
+            if (flipVideo) display.mirror(true, false);
+            display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+            background.update(display, backgroundSub);
+            backgroundSub.update();
+        }
+    }
+    
+    // Position Calibration
+    if (currentState > WATCHING_CROWD && currentState < SCROLLPAPER) {
+        roiSize = gui.getValueI("roiSize");
+        leftCamCal = gui.getValueI("leftCamCal");
+        rightCamCal = gui.getValueI("rightCamCal");
+        frontScaleFactor = gui.getValueF("frontScaleFactor");
+        backScaleFactor = gui.getValueF("backScaleFactor");
+        leaderPosAdjusted = ofMap(OUTPUT_LARGE_WIDTH - leaderOverheadPosition.x, 0, OUTPUT_LARGE_WIDTH, leftCamCal, rightCamCal);
+        leaderPosAdjusted -= OUTPUT_LARGE_WIDTH/2;
+        // Account for camera scue
+        if (leaderOverheadPosition.y > OUTPUT_LARGE_HEIGHT/2) {
+            distScale = ofMap(leaderOverheadPosition.y, OUTPUT_LARGE_HEIGHT/2, OUTPUT_LARGE_HEIGHT, 1, frontScaleFactor);
+            //distScale = frontScaleFactor;
+        } else {
+            distScale = ofMap(leaderOverheadPosition.y, 0, OUTPUT_LARGE_HEIGHT/2, backScaleFactor, 1);
+            //distScale = backScaleFactor;
+        }
+        leaderPosAdjusted *= distScale;
+        roiSize *= distScale;
     }
     
     switch (currentState) {
@@ -161,6 +291,7 @@ void testApp::update(){
             
         case WATCHING_CROWD:
         {
+
             // Values come in from TSPS
             people = tspsReceiver.getPeople();
             crowd.clear();
@@ -189,6 +320,7 @@ void testApp::update(){
                 }
 
                 leaderOverheadPosition = crowd[leaderPoint];
+                    
                 currentState++;
                 ofLog(OF_LOG_NOTICE, "== STATE: CREATING PORTRAIT ==");
             }
@@ -201,13 +333,8 @@ void testApp::update(){
         {
             // Most of this OpenCV stuff is taken from: http://github.com/kylemcdonald/BaristaBot
             
-            
-            if (!backgroundSubtraction) {
-                cam.update();
-                copy(cam, display);
-                display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
-            }
-            
+            if (!backgroundSubtraction) cam.update();
+
             if(cam.isFrameNew()) {
                 int black = gui.getValueI("black");
                 float sigma1 = gui.getValueF("sigma1");
@@ -216,18 +343,31 @@ void testApp::update(){
                 float thresh = gui.getValueF("thresh");
                 int halfw = gui.getValueI("halfw");
                 int smoothPasses = gui.getValueI("smoothPasses");
-                //minGapLength = gui.getValueF("minGapLength");
-                //minPathLength = gui.getValueI("minPathLength");
+                float minGapLength = gui.getValueF("minGapLength");
+                int minPathLength = gui.getValueI("minPathLength");
                 float facePadding = gui.getValueF("facePadding");
                 int verticalOffset = gui.getValueI("verticalOffset");
                 int shadeThres = gui.getValueF("shadingThresh");
+                backgroundSubtraction = gui.getValueB("backgroundSubtraction");
+                background.setLearningTime(gui.getValueI("backgroundLearningTime"));
+                background.setThresholdValue(gui.getValueI("backgroundThresholdValue"));
+                
+                shadingOn = gui.getValueB("shadingOn");
+                drawingOn = gui.getValueB("drawingOn");
                 
                 contourFinder.setMinAreaRadius(gui.getValueI("contourMinAreaRadius"));
                 contourFinder.setMaxAreaRadius(gui.getValueI("contourMaxAreaRadius"));
                 contourFinder.setFindHoles(gui.getValueB("contourFindHoles"));
                 contourFinder.setSimplify(gui.getValueB("contourSimplify"));
                 
+                if (!backgroundSubtraction) {
+                    copy(cam, display);
+                    if (flipVideo) display.mirror(true, false);
+                    display.resize(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+                }
+                
                 convertColor(cam, gray, CV_RGB2GRAY);
+                if (flipVideo) gray.mirror(true, false);
                 resize(gray, graySmall);
                 
                 // TODO: Set OpenCV ROI by information from overhead cam
@@ -237,7 +377,7 @@ void testApp::update(){
                 
                 classifier.detectMultiScale(graySmallMat, objects, 1.06, 1,
                                             CASCADE_DO_CANNY_PRUNING |
-                                            CASCADE_FIND_BIGGEST_OBJECT |
+                                            //CASCADE_FIND_BIGGEST_OBJECT |
                                             //CASCADE_DO_ROUGH_SEARCH |
                                             0);
                 
@@ -268,6 +408,8 @@ void testApp::update(){
                     faceRect.x += whDiff / 2;
                 }
                 
+                // TODO: Do this with full res image?
+                
                 cv::Rect roi = toCv(faceRect);
                 Mat grayMat = toCv(gray);
                 Mat croppedGrayMat(grayMat, roi);
@@ -288,6 +430,11 @@ void testApp::update(){
                 }
                 
                 face.update();
+                
+                // Save Face
+                string fileName = ofToString(ofGetYear()) + "-" + ofToString(ofGetMonth()) + "-" + ofToString(ofGetDay())
+                    + " " + ofToString(ofGetHours()) + "." + ofToString(ofGetMinutes()) + "." + ofToString(ofGetSeconds()) + " face.png";
+                ofSaveImage(face, fileName);
                 
                 int j = 0;
                 unsigned char* grayPixels = face.getPixels();
@@ -356,45 +503,55 @@ void testApp::update(){
                 contourFinder.findContours(faceThresholded);
                 int n = contourFinder.size();
                 
-                shading.clear();
-                
-                // Create Shading
-                ofLog(OF_LOG_NOTICE, "  ---- Create Shading ----");
-                for (int i = 0; i < croppedFaceSize*2/SHADING_RES; i++) {
-                    ofPoint lineStart = ofPoint(0, i * SHADING_RES);
-                    ofPoint lineEnd = ofPoint(i * SHADING_RES, 0);
+                if (shadingOn) {
+                     // Create Shading
+                    shading.clear();
+                    
+                   
+                    ofLog(OF_LOG_NOTICE, "  ---- Create Shading ----");
+                    for (int i = 0; i < croppedFaceSize*2/SHADING_RES; i++) {
+                        ofPoint lineStart = ofPoint(0, i * SHADING_RES);
+                        ofPoint lineEnd = ofPoint(i * SHADING_RES, 0);
 
-                    for(int i = 0; i < n; i++) {
-                        linePoints.clear();
-                        
-                        ofPolyline blob = contourFinder.getPolyline(i).getSmoothed(n/10);
-                        for(int i = 1; i < blob.size(); i++) {
-                            ofPoint intersection;
-                            ofPoint line2start = ofPoint(blob[i-1].x,blob[i-1].y);
-                            ofPoint line2end = ofPoint(blob[i].x,blob[i].y);
-                            if (ofLineSegmentIntersection(lineStart, lineEnd, line2start, line2end, intersection)) {
-                                linePoints.push_back(intersection);
+                        for(int i = 0; i < n; i++) {
+                            linePoints.clear();
+                            
+                            ofPolyline blob = contourFinder.getPolyline(i).getSmoothed(n/10);
+                            for(int i = 1; i < blob.size(); i++) {
+                                ofPoint intersection;
+                                ofPoint line2start = ofPoint(blob[i-1].x,blob[i-1].y);
+                                ofPoint line2end = ofPoint(blob[i].x,blob[i].y);
+                                if (ofLineSegmentIntersection(lineStart, lineEnd, line2start, line2end, intersection)) {
+                                    linePoints.push_back(intersection);
+                                }
                             }
-                        }
-                        
-                        ofSort(linePoints, sortByX);
-                        
-                        for(int i = 0; i < linePoints.size(); i+=2) {
-                            if (i+1 < linePoints.size()) {
-                                ofPolyline line;
-                                line.addVertex(linePoints[i]);
-                                line.addVertex(linePoints[i+1]);
-                                shading.push_back(line);
+                            
+                            ofSort(linePoints, sortByX);
+                            
+                            for(int i = 0; i < linePoints.size(); i+=2) {
+                                if (i+1 < linePoints.size()) {
+                                    ofPolyline line;
+                                    line.addVertex(linePoints[i]);
+                                    line.addVertex(linePoints[i+1]);
+                                    shading.push_back(line);
+                                }
                             }
                         }
                     }
                 }
                 
-                // Do threshoding & look for min percentage black to white?
+                // TODO: look for min percentage black to white? Or num of paths? If not, start over
+                
+                if (drawingOn) {
+                    //Get Paths
+                    paths = getPaths(thinned, minGapLength, minPathLength);
+                    pathsToInstructions();
+                }
                     
                 // B&W Image -> Vector graphics (using outlines or fill?)
                 currentState++;
                 ofLog(OF_LOG_NOTICE, "== STATE: AWAITING PORTRAIT CONFIRMATION ==");
+
             }
         }
         break;
@@ -412,6 +569,10 @@ void testApp::update(){
             
         case SCROLLPAPER:
         {
+            
+            if (plotterReady) {
+                
+            }
             // Scroll the paper into place
             // Delay until complete
             // currentState++;
@@ -423,10 +584,29 @@ void testApp::update(){
             
         case DRAWING_PORTRAIT:
         {
-            // Do the drawing
-            // When complete
-            // currentState++;
-            // ofLog(OF_LOG_NOTICE, "== STATE: DRAWING COMPLETE ==");
+            
+//            if (instructions.size() > 0 && plotterReady){
+//                cout << "== GETTING Instruction #" << currentInstruction << " ==\n";
+//                message = instructions[currentInstruction].toString();
+//                currentInstruction += 1;
+//                
+//                if (currentInstruction >= instructions.size()) {
+//                    currentState++;
+//                    ofLog(OF_LOG_NOTICE, "== STATE: DRAWING COMPLETE ==");
+//                }
+//                
+//                if(message != ""){
+//                    cout << "==== SENDING serial: " << message << "\n";
+//                    plotterReady = false;
+//                    serial.writeString(message);
+//                    message = "";
+//                }
+//                
+//            } else {
+//                ofLog(OF_LOG_NOTICE, "---- Instructions empty OR plotter not ready. Starting over");
+//                currentState++;
+//                ofLog(OF_LOG_NOTICE, "== STATE: WATCHING CROWD ==");
+//            }
         }
         break;
             
@@ -455,42 +635,48 @@ void testApp::draw(){
     ofRect(OUTPUT_LARGE_WIDTH+PADDING,1,OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
     
     // DRAW ALL THE TIME
-    display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
-    if (backgroundSubtraction) backgroundSub.draw((OUTPUT_LARGE_WIDTH+PADDING)*2, 0);
-    face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    faceThresholded.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    cld.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    croppedBackground.draw(CROPPED_FACE_SIZE + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    //thinned.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
-    
-    //int n = contourFinder.size();
-    ofTranslate(CROPPED_FACE_SIZE*1.5 + PADDING*3, OUTPUT_LARGE_HEIGHT+PADDING);
-    thinned.draw(0,0);
-    
-//    for(int i = 0; i < n; i++) {
-//        ofPolyline blob = contourFinder.getPolyline(i);
-//        ofSetColor(255,0,0);
-//        blob.draw();
-//        ofSetColor(255,255,255);
-//        blob.getSmoothed(n/10).draw();
-//        //ofxCvBlob blob = contourFinder.blobs.at(i);
-//        // do something fun with blob
-//    }
-    ofSetColor(255,0,0);
-    for(int i = 0; i < shading.size(); i++) {
-        shading[i].draw();
+    if (drawingState > 0 && drawingState < 3) {
+        tspsGrab.draw(0,0);
+        display.draw(OUTPUT_LARGE_WIDTH+PADDING, 0);
+        if (backgroundSubtraction) backgroundSub.draw((OUTPUT_LARGE_WIDTH+PADDING)*2, 0);
+        face.draw(0, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        faceThresholded.draw(0, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        cld.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        thresholded.draw(CROPPED_FACE_SIZE/2 + PADDING, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        croppedBackground.draw(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        thinned.draw(CROPPED_FACE_SIZE + PADDING*2, OUTPUT_LARGE_HEIGHT+PADDING*2+CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2, CROPPED_FACE_SIZE/2);
+        
+        ofPushMatrix();
+        
+        // Draw face / cv / roi stuff
+        
+        ofTranslate(OUTPUT_LARGE_WIDTH+PADDING, 0);
+        ofSetColor(0, 0, 255);
+        // TODO: Make this the CV ROI
+        ofDrawBitmapString("x: " + ofToString(leaderOverheadPosition.x),2, 13);
+        ofDrawBitmapString("y: " + ofToString(OUTPUT_LARGE_HEIGHT - leaderOverheadPosition.y), 2, 23);
+        ofSetColor(0, 255, 0);
+        ofDrawBitmapString("x*: " + ofToString(leaderPosAdjusted), 2, 33);
+        ofRect(OUTPUT_LARGE_WIDTH/2 + leaderPosAdjusted - roiSize/2, 0, roiSize, OUTPUT_LARGE_HEIGHT);
+        
+        //ofScale((OUTPUT_LARGE_WIDTH / VIDEO_WIDTH) / CV_SCALE_FACTOR, (OUTPUT_LARGE_HEIGHT / VIDEO_HEIGTH) / CV_SCALE_FACTOR); //Doesn't work for some reason?
+        ofScale(0.375 / CV_SCALE_FACTOR, 0.375 / CV_SCALE_FACTOR);
+        ofSetColor(255, 0 ,0);
+        for(int i = 0; i < objects.size(); i++) {
+            ofRect(toOf(objects[i]));
+            ofDrawBitmapString(ofToString(i), objects[i].x + 2, objects[i].y + 13);
+            ofDrawBitmapString(ofToString(objects[i].width) + "x" + ofToString(objects[i].height), objects[i].x + 2, objects[i].y + 23);
+        }
+        
+        ofPopMatrix();
+        
+        ofPushMatrix(); 
+        ofTranslate(CROPPED_FACE_SIZE*1.5 + PADDING*3, OUTPUT_LARGE_HEIGHT+PADDING);
+        drawPaths();
+        ofPopMatrix();
     }
-    ofSetColor(0, 255, 0);
-    for(int i = 0; i < backgroundContourFinder.size(); i++) {
-        ofPolyline blob = backgroundContourFinder.getPolyline(i);
-        blob.draw();
-    }
-    //backgroundContourFinder.draw();
-    //tspsReceiver.draw(OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
-    //cam.draw(0,0);
     
-    switch (currentState) {
+    switch (drawingState) {
             
         // - - - - - - - - - - - - - - - - - - - - - - - - - - -
             
@@ -507,6 +693,10 @@ void testApp::draw(){
                 ofSetColor(255);
                 ofCircle(crowd.getClosestPoint(groupCenter), 5);
             }
+            if (currentState != drawingState) {
+                tspsGrab.grabScreen(0, 0, OUTPUT_LARGE_WIDTH, OUTPUT_LARGE_HEIGHT);
+                tspsGrab.update();
+            }
         }
         break;
             
@@ -514,17 +704,17 @@ void testApp::draw(){
             
         case CREATING_PORTRAIT:
         {
-            //cam.draw(0,0);
-            ofNoFill();
-            
-            //ofPushMatrix();
-            //ofScale(1 / scaleFactor, 1 / scaleFactor);
-            //ofTranslate()
-            for(int i = 0; i < objects.size(); i++) {
-                ofRect(toOf(objects[i]));
-            }
-            //ofPopMatrix()
-            ofDrawBitmapString(ofToString(objects.size()), 10, 20);
+//            //cam.draw(0,0);
+//            ofNoFill();
+//            
+//            //ofPushMatrix();
+//            //ofScale(1 / scaleFactor, 1 / scaleFactor);
+//            //ofTranslate()
+//            for(int i = 0; i < objects.size(); i++) {
+//                ofRect(toOf(objects[i]));
+//            }
+//            //ofPopMatrix()
+//            ofDrawBitmapString(ofToString(objects.size()), 10, 20);
         }
         break;
             
@@ -554,6 +744,9 @@ void testApp::draw(){
     }
     // Debug / diagnostics
     // tspsReceiver.status
+    
+    ofSetColor(0, 255 ,0);
+    font.drawString(currentStateTitle, 25, 25);
 }
 
 //--------------------------------------------------------------
@@ -644,4 +837,78 @@ void testApp::onPersonWillLeave( ofxTSPS::EventArgs & tspsEvent ){
     // you can access the person like this:
     // tspsEvent.person
     
+}
+
+//--------------------------------------------------------------
+void testApp::drawPaths() {
+    if (shadingOn) {
+        ofSetColor(255,0,0);
+        for(int i = 0; i < shading.size(); i++) {
+            shading[i].draw();
+        }
+    }
+    if (drawingOn) {
+        ofSetColor(yellowPrint);
+        for(int i = 0; i < paths.size(); i++) {
+            paths[i].draw();
+            if(i + 1 < paths.size()) {
+                ofVec2f endPoint = paths[i].getVertices()[paths[i].size() - 1];
+                ofVec2f startPoint = paths[i + 1].getVertices()[0];
+                ofSetColor(magentaPrint, 128);
+                ofLine(endPoint, startPoint);
+            }
+        }
+    }
+}
+
+//--------------------------------------------------------------
+void testApp::pathsToInstructions() {
+    ofLog(OF_LOG_NOTICE, "---- Paths to Instructions ----");
+    float startX = gui.getValueF("startX");
+    float startY = gui.getValueF("startY");
+    float home_x = gui.getValueF("home_x");
+    float home_y = gui.getValueF("home_y");
+    firstLastDraw = gui.getValueB("firstLastDraw");
+    
+    if (instructions.size()>0) instructions.erase(instructions.begin());
+    cout << "--PATHS TO INSTRUCTIONS\n";
+    // MOVE TO START:
+    ofVec2f startPoint = paths[0].getVertices()[0];
+    instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY));
+    cout << "---- MOVE FOR #1 TO: [ " << startPoint << "]\n";
+	for(int i = 0; i < paths.size(); i++) {
+		//DRAW
+        for(int j = 1; j < paths[i].getVertices().size(); j++) {
+            ofVec2f endPoint = paths[i].getVertices()[j];
+            instructions.push_back(Instruction(LINE_ABS, endPoint.x*plotScaleFactor + startX, endPoint.y*plotScaleFactor + startY ));
+            cout << "------ DRAW FOR #" << i << " TO:" << j << " = [ " << endPoint << " ]\n";
+        }
+        // MOVE
+        if (firstLastDraw && i == 0 && paths.size() > 2) {
+            cout << "---- SKIP TO LAST VECTOR SET \n";
+            // MOVE STRAIGHT TO LAST DRAW SET
+            i = paths.size()-2;
+        }
+		if(i + 1 < paths.size()) {
+			ofVec2f startPoint = paths[i + 1].getVertices()[0];
+            instructions.push_back(Instruction(MOVE_ABS, startPoint.x*plotScaleFactor + startX, startPoint.y*plotScaleFactor + startY ));
+            cout << "---- MOVE FOR #" << i + 1 << " TO: [ " << startPoint << " ]\n";
+		}
+	}
+    cout << "--COMPLETE: x INSTRUCTIONS CREATED\n" << "--NOW PRINT";
+    if (instructions.size() > 0) {
+        instructions.push_back(Instruction(MOVE_ABS, home_x, home_y ));
+        currentlyPlotting = true;
+    }
+}
+
+//--------------------------------------------------------------
+
+void testApp::onNewMessage(string & message)
+{
+	cout << "onNewMessage, message: " << message << "\n";
+	if (message == "OK") {
+        cout << "-- PLOTTER READY --\n";
+        plotterReady = true;
+    }
 }
