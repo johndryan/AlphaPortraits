@@ -13,7 +13,7 @@
 
 #include "Instruction.h"
 
-Instruction::Instruction(int _type, float _x, float _y)
+Instruction::Instruction(int _type, int _x, int _y)
 {
     x = _x;
     y = _y;

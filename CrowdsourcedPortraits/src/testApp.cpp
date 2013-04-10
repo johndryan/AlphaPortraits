@@ -112,7 +112,7 @@ void testApp::setup(){
     plotMaxX = 13940;
     plotMinY = 3000;
     plotMaxY = 13500;
-    plotScaleFactor = 10;
+    plotScaleFactor = 15;
     //currentlyPlotting = false;
     plotterReady = false;
     firstLastDraw = false;
@@ -235,7 +235,7 @@ void testApp::setup(){
     gui.addSlider("SCALE", plotScaleFactor, 1, 20, true);
     gui.addSlider("home_x", 9620, plotMinX, plotMaxX, true);
     gui.addSlider("home_y", 9620, plotMinY, plotMaxY, true);
-    gui.addSlider("startX", 6500, plotMinX, plotMaxX, true);
+    gui.addSlider("startX", 3500, plotMinX, plotMaxX, true);
     gui.addSlider("startY", 3500, plotMinY, plotMaxY, true);
     gui.addToggle("firstLastDraw", false);
     gui.loadSettings("calibration.xml");

@@ -23,7 +23,7 @@ class Instruction {
         float y;
         int type;      // size
         
-        Instruction(int type, float x, float y); // constructor - used to initialize an object, if no properties are passed
+        Instruction(int type, int x, int y); // constructor - used to initialize an object, if no properties are passed
         //               the program sets them to the default value
         
     private: // place private functions or variables declarations here
